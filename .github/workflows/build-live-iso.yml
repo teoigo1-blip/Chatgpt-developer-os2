@@ -2,6 +2,9 @@
 name: Build Live USB ISO
 
 on:
+  push:
+    branches: [codex/windows-iso]
+    paths: [".github/workflows/build-live-iso.yml"]
   workflow_dispatch:
     inputs:
       publish_release:
@@ -27,6 +30,36 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Restore missing v4.2 source files from bundled archive
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import zipfile
+          root = Path.cwd().resolve()
+          archive = root / 'ChatGPTDeveloperOS_v4.2_LiveUSB_SOURCE.zip'
+          restored = []
+          with zipfile.ZipFile(archive) as z:
+              for line in (root / 'SOURCE_SHA256SUMS').read_text().splitlines():
+                  expected, relative = line.split('  ', 1)
+                  path = (root / relative).resolve()
+                  if not path.is_relative_to(root):
+                      raise SystemExit('Invalid source path')
+                  if path.is_file():
+                      continue
+                  matches = [n for n in z.namelist() if n.endswith('/' + relative) or n == relative]
+                  if len(matches) != 1:
+                      raise SystemExit('Missing or ambiguous archive entry: ' + relative)
+                  data = z.read(matches[0])
+                  if hashlib.sha256(data).hexdigest() != expected:
+                      raise SystemExit('Original checksum mismatch: ' + relative)
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(data)
+                  restored.append(relative)
+          print('Restored original source files:', *restored, sep='\n')
+          PY
+          find config/hooks config/includes.chroot/usr/local/bin -type f -exec chmod 755 {} +
 
       - name: Enable script execution
         run: |
