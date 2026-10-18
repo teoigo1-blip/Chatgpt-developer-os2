@@ -1,0 +1,164 @@
+name: Build Live USB ISO
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish a GitHub Release only after build and boot checks pass"
+        type: boolean
+        required: true
+        default: false
+      release_tag:
+        description: "New tag for release (e.g. v2.9-iso1); required when publishing"
+        type: string
+        required: false
+        default: ""
+permissions:
+  contents: read
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reclaim space on ephemeral GitHub runner
+        run: ./ci-runner-space.sh
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y live-build debootstrap xorriso squashfs-tools syslinux-common isolinux grub-pc-bin grub-efi-amd64-bin mtools dosfstools qemu-system-x86 ovmf file
+      - name: Check build host and free space
+        run: ./ci-environment-check.sh
+      - name: Validate scripts and configuration
+        run: |
+          ./prebuild-gate.sh
+          bash -n build.sh ci-build-iso.sh ci-qemu-boot.sh github-preflight.sh
+          ./github-preflight.sh
+          python3 ./check-build-inputs.py
+          python3 ./validate-workflow.py
+          python3 ./check-target-packages.py
+          ./verify-boot-config.sh
+      - name: Check workflow and shell syntax
+        run: |
+          bash -n ci-build-iso.sh qemu-serial-boot-check.sh
+          python3 -m py_compile check-build-inputs.py check-target-packages.py
+      - name: Note target distribution
+        run: echo "Package candidates on Ubuntu do not validate Debian trixie; target packages are resolved during live-build."
+      - name: Ensure fresh build output
+        run: |
+          if [ -d dist ]; then
+            echo 'Unexpected pre-existing dist directory' >&2
+            exit 1
+          fi
+      - name: Build Debian Live image
+        run: sudo ./ci-build-iso.sh "$PWD/dist"
+      - name: Locate and verify artifact
+        run: |
+          mapfile -t images < <(find dist -maxdepth 1 -type f -name '*.iso' -print)
+          test "${#images[@]}" -eq 1
+          ./verify-iso.sh "${images[0]}"
+          ./inspect-iso-boot-files.sh "${images[0]}"
+          ./iso-artifact-report.py "${images[0]}" --output iso-artifact.json
+          test -s iso-artifact.json
+          cp -- "${images[0]}" release.iso
+          sha256sum release.iso > iso.sha256
+          sha256sum -c iso.sha256
+      - name: Inspect generated artifact sizes
+        run: |
+          test -s release.iso
+          test -s iso.sha256
+          test -s iso-artifact.json
+          du -h release.iso
+      - name: Validate QEMU BIOS and UEFI prerequisites
+        run: |
+          ./boot-test-preflight.sh release.iso
+      - name: Test BIOS kernel boot
+        run: ./ci-qemu-boot.sh release.iso bios 120
+      - name: Test UEFI kernel boot
+        run: ./ci-qemu-boot.sh release.iso uefi 120
+      - name: Upload boot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-evidence
+          path: dist/boot-evidence/
+          if-no-files-found: ignore
+      - name: Analyze build log on failure
+        if: failure()
+        run: |
+          if [ -s dist/build.log ]; then
+            python3 diagnose-build.py dist/build.log --output dist/build-diagnosis.json
+          else
+            echo 'No build log was produced; inspect earlier workflow steps.'
+          fi
+      - name: Upload source validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-validation
+          path: |
+            test-results.json
+            dist/build.log
+          if-no-files-found: ignore
+      - name: Upload unit-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: test-results.json
+          if-no-files-found: ignore
+      - name: Upload diagnostics on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            dist/build.log
+            dist/build-diagnosis.json
+            .build/logs/
+          if-no-files-found: ignore
+      - name: Upload ISO and integrity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-developer-os-iso
+          path: |
+            release.iso
+            iso.sha256
+            iso-artifact.json
+          retention-days: 30
+          if-no-files-found: error
+
+  publish:
+    needs: iso
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Validate release tag
+        env:
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+(-[A-Za-z0-9._-]+)?$ ]] || { echo 'Invalid release tag' >&2; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          name: chatgpt-developer-os-iso
+          path: release
+      - name: Verify downloaded ISO
+        run: |
+          cd release
+          sha256sum -c iso.sha256
+          test -s release.iso
+      - name: Publish verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release tag already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          gh release create "$TAG" release/release.iso release/iso.sha256 release/iso-artifact.json \
+            --title "ChatGPT Developer OS $TAG" \
+            --notes "Automated ISO build and QEMU BIOS/UEFI serial boot checks passed. Real-hardware compatibility, GUI, and USB persistence remain unverified." \
+            --prerelease
