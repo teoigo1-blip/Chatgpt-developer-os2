@@ -26,9 +26,9 @@ def main():
                     if events:
                         chunk=os.read(process.stdout.fileno(),65536).decode(errors='replace');transcript+=chunk
                         tail=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',transcript[-1800:]).replace('\r','')
-                        if not unlocked and re.search(r'(?i)(passphrase|unlock.*disk)',tail):send(key);unlocked=True
+                        if not unlocked and re.search(r'(?i)(passphrase|unlock.*disk|contraseña.*disco|frase.*contraseña)',tail):send(key);unlocked=True
                         if not user and re.search(r'(?im)^.*login:\s*$',tail):send('user');user=True
-                        elif user and not password and re.search(r'(?im)^password:\s*$',tail):send('live');password=True;password_time=time.monotonic()
+                        elif user and not password and re.search(r'(?im)^(password|contraseña|contrasena):\s*$',tail):send('live');password=True;password_time=time.monotonic()
                     if password and not sent and time.monotonic()-password_time>8:
                         if phase=='write':body="mkdir -p ~/Projects; printf '%s\\n' '"+token+"' > ~/Projects/.persistence-proof; sync"
                         else:body="test \"$(cat ~/Projects/.persistence-proof)\" = '"+token+"'"
