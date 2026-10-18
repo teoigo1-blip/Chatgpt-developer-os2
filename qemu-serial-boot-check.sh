@@ -18,12 +18,21 @@ if [[ "$mode" == uefi ]]; then
  [[ -n "$firmware" ]] || { echo 'Firmware UEFI no encontrado' >&2; exit 2; }
  args+=(-drive "if=pflash,format=raw,readonly=on,file=$firmware")
 fi
-log=$(mktemp)
-trap 'rm -f "$log"' EXIT
+scratch=$(mktemp -d)
+log="$scratch/serial.log"
+trap 'rm -rf -- "$scratch"' EXIT
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+mkdir -p "$root/dist/boot-evidence"
+args+=(-qmp "unix:$scratch/qmp.sock,server=on,wait=off")
 set +e
-timeout --signal=TERM --kill-after=5s "${seconds}s" qemu-system-x86_64 "${args[@]}" >"$log" 2>&1
+timeout --signal=TERM --kill-after=5s "${seconds}s" qemu-system-x86_64 "${args[@]}" >"$log" 2>&1 &
+vm_pid=$!
+python3 "$root/capture-qemu-screen.py" "$scratch/qmp.sock" "$root/dist/boot-evidence/$mode.ppm" "$seconds" || echo 'Framebuffer capture unavailable; inspect serial evidence.'
+wait "$vm_pid"
 status=$?
 set -e
+# Preserve the complete serial output in the caller's boot-evidence log.
+cat "$log"
 if grep -Eiq '^\[[[:space:]]*[0-9]+\.[0-9]+\] Linux version [0-9]|^Linux version [0-9]|Run /init as init process|systemd\[[0-9]+\]' "$log"; then
  echo "OK: $mode: evidencia de arranque del kernel en consola serie"
  exit 0
