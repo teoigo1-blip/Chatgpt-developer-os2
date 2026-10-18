@@ -1,0 +1,80 @@
+name: Test retained ISO with live menu selection
+on:
+  push:
+    branches: [codex/windows-iso]
+    paths: [.github/workflows/retest-retained-iso.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [bios, uefi]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chatgpt-developer-os-iso-unverified
+          run-id: 39147552228
+          github-token: ${{ github.token }}
+          path: image
+      - name: Verify downloaded ISO
+        run: |
+          cd image
+          sha256sum -c SHA256SUMS
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 ovmf
+      - name: Select Live system and capture actual boot
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          mkdir -p evidence
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, socket, subprocess, time
+          mode=os.environ['MODE']
+          iso=next(pathlib.Path('image').glob('*.iso')).resolve()
+          output=pathlib.Path('evidence').resolve()
+          args=['qemu-system-x86_64','-m','4096','-smp','2','-boot','d','-cdrom',str(iso),'-nic','none','-display','none','-monitor','none','-serial','stdio','-no-reboot','-qmp','unix:/tmp/boot-qmp.sock,server=on,wait=off']
+          if mode=='uefi': args+=['-drive','if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd']
+          with (output/f'{mode}.log').open('wb') as log:
+              vm=subprocess.Popen(args,stdout=log,stderr=subprocess.STDOUT)
+              try:
+                  time.sleep(15)
+                  with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as s:
+                      s.settimeout(10); s.connect('/tmp/boot-qmp.sock')
+                      stream=s.makefile('rwb'); json.loads(stream.readline())
+                      def command(name,arguments=None):
+                          request={'execute':name}
+                          if arguments is not None: request['arguments']=arguments
+                          stream.write((json.dumps(request)+'\n').encode()); stream.flush()
+                          while True:
+                              response=json.loads(stream.readline())
+                              if 'error' in response: raise RuntimeError(response['error'])
+                              if 'return' in response: return response['return']
+                      command('qmp_capabilities')
+                      command('screendump',{'filename':str(output/f'{mode}-menu.ppm')})
+                      command('send-key',{'keys':[{'type':'qcode','data':'ret'}]})
+                      for delay,label in [(90,'90s'),(135,'225s')]:
+                          time.sleep(delay)
+                          command('screendump',{'filename':str(output/f'{mode}-{label}.ppm')})
+                      status=command('query-status')
+              finally:
+                  vm.terminate()
+                  try: vm.wait(timeout=10)
+                  except subprocess.TimeoutExpired: vm.kill(); vm.wait()
+          serial=(output/f'{mode}.log').read_text(errors='replace')
+          kernel=bool(re.search(r'Linux version \d|Run /init as init process|systemd\[\d+\]',serial))
+          report={'mode':mode,'source_run':39147552228,'iso_bytes':iso.stat().st_size,'sha256':hashlib.file_digest(iso.open('rb'),'sha256').hexdigest(),'live_menu_enter_sent':True,'kernel_startup_evidence':kernel,'vm_status':status,'desktop_functionality_tested':False}
+          (output/f'{mode}.json').write_text(json.dumps(report,indent=2)+'\n')
+          print(json.dumps(report)); print(serial[-12000:])
+          if not kernel: raise SystemExit('Kernel startup not confirmed; inspect actual screenshots')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retained-iso-${{ matrix.mode }}-evidence
+          path: evidence/
+          if-no-files-found: error
