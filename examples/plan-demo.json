@@ -1,0 +1,12 @@
+{
+  "steps": [
+    {
+      "action": "open",
+      "program": "thunar"
+    },
+    {
+      "action": "screenshot",
+      "output": "~/captura-desktop.png"
+    }
+  ]
+}
