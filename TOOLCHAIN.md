@@ -4,6 +4,14 @@ This image includes Codex CLI 0.163.0, jadx 1.5.6, Ghidra 12.1.4, Gradle 8.14.3,
 Java 21, Android SDK Platform 36 and Build Tools 36.0.0. Pinned ZIP downloads are
 verified using published SHA-256 digests. npm verifies its package integrity.
 
+REA (morluto/rea) 6.7.0 is installed with Node.js 24.22.0 LTS. Its local MCP server
+and matching instructions are registered in the Live user's Codex configuration.
+Ghidra is the default native provider. The pinned jadx-headless-mcp 0.7.1 JAR
+provides REA Android analysis. Chromium provides its Chrome-family browser.
+Tests exercise the MCP server, Codex registration, JavaScript inspection, an
+actual native main function through Ghidra, and analysis of the signed test APK.
+No external account or paid model request is needed for these local checks.
+
 Android SDK terms were explicitly accepted by the owner on 2026-10-18 for this
 personal environment. Keep automatic public release publishing disabled for this
 personal SDK image. This is not a distribution permission grant for other users.
@@ -30,3 +38,5 @@ Sources:
 - https://developer.android.com/studio#command-tools
 - https://developer.android.com/tools/sdkmanager
 - https://services.gradle.org/distributions/gradle-8.14.3-bin.zip.sha256
+- https://github.com/morluto/rea
+- https://nodejs.org/en/blog/release/v24.22.0
