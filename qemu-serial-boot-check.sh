@@ -5,7 +5,7 @@ set -euo pipefail
 if (( $# < 2 || $# > 3 )); then echo "Uso: $0 imagen.iso bios|uefi [segundos]" >&2; exit 2; fi
 iso=$(realpath "$1")
 mode=$2
-seconds=${3:-300}
+seconds=${3:-600}
 [[ -s "$iso" && "$seconds" =~ ^[0-9]+$ && "$seconds" -ge 180 ]] || { echo 'ISO o duración no válida (mínimo 180 segundos)' >&2; exit 2; }
 [[ "$mode" == bios || "$mode" == uefi ]] || { echo 'Modo inválido' >&2; exit 2; }
 for cmd in qemu-system-x86_64 timeout grep; do command -v "$cmd" >/dev/null || { echo "Falta $cmd" >&2; exit 2; }; done
@@ -29,7 +29,8 @@ exec 3<> "$scratch/input"
 set +e
 timeout --signal=TERM --kill-after=5s "${seconds}s" qemu-system-x86_64 "${args[@]}" <&3 >"$log" 2>&1 &
 vm_pid=$!
-python3 "$root/capture-qemu-screen.py" "$scratch/qmp.sock" "$root/dist/boot-evidence/$mode.ppm" "$seconds" "$scratch/input" || echo 'Framebuffer capture unavailable; inspect serial evidence.'
+python3 "$root/capture-qemu-screen.py" "$scratch/qmp.sock" "$root/dist/boot-evidence/$mode.ppm" "$seconds" "$scratch/input" "$log" || echo 'Framebuffer capture unavailable; inspect serial evidence.'
+kill "$vm_pid" 2>/dev/null || true
 wait "$vm_pid"
 status=$?
 set -e

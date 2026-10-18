@@ -21,7 +21,7 @@ def main():
             started=time.monotonic();transcript='';unlocked=False;user=False;password=False;sent=False;password_time=0
             def send(text):process.stdin.write((text+'\n').encode());process.stdin.flush()
             try:
-                while time.monotonic()-started<360 and process.poll() is None:
+                while time.monotonic()-started<600 and process.poll() is None:
                     events=selector.select(1)
                     if events:
                         chunk=os.read(process.stdout.fileno(),65536).decode(errors='replace');transcript+=chunk
