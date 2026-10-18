@@ -1,5 +1,6 @@
 # Productivity, recovery and rootless containers
 locales-all
+sudo
 shellcheck
 ccache
 restic
