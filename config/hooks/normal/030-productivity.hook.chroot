@@ -38,7 +38,7 @@ printf '%s\n' "$playwright_mcp_version" > /usr/local/share/developer-os/playwrig
 cat >> /etc/profile.d/developer-toolchain.sh <<'ENV'
 export PLAYWRIGHT_BROWSERS_PATH=/opt/developer-os/playwright-browsers
 export CCACHE_MAXSIZE=1G
-export PATH="/usr/lib/ccache:$PATH"
+export PATH="/usr/lib/ccache:/usr/sbin:/sbin:$PATH"
 ENV
 cat >> /etc/skel/.codex/config.toml <<'CONFIG'
 
