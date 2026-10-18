@@ -20,8 +20,11 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+            - name: Enable script execution
+        run: |
+          find . -maxdepth 1 -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} +
       - name: Reclaim space on ephemeral GitHub runner
-        run: ./ci-runner-space.sh
+        run: bash ./ci-runner-space.sh
       - name: Install build prerequisites
         run: |
           sudo apt-get update
