@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Panel de Developer OS
-Exec=developer-dashboard
+Exec=/usr/local/bin/developer-dashboard
 Terminal=false
+OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
