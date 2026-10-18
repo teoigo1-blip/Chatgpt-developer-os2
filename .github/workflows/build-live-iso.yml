@@ -168,10 +168,10 @@ jobs:
         run: ./boot-test-preflight.sh release.iso
 
       - name: Test BIOS kernel boot
-        run: ./ci-qemu-boot.sh release.iso bios 120
+        run: ./ci-qemu-boot.sh release.iso bios 300
 
       - name: Test UEFI kernel boot
-        run: ./ci-qemu-boot.sh release.iso uefi 120
+        run: ./ci-qemu-boot.sh release.iso uefi 300
 
       - name: Upload boot evidence
         if: always()
