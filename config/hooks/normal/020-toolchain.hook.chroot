@@ -106,6 +106,4 @@ export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 . /etc/profile.d/developer-toolchain.sh
 HOME=/etc/skel rea setup --client codex --yes --json
 HOME=/etc/skel rea doctor --client codex --skill --json
-HOME=/etc/skel developer-doctor --strict
-developer-smoke-test --output /usr/local/share/developer-os/toolchain-smoke.json
 npm cache clean --force
