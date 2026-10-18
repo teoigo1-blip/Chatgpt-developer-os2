@@ -31,7 +31,10 @@ try:
     assert any(t['name']=='browser_navigate' for t in tools['tools'])
     result=rpc(3,'tools/call',{'name':'browser_navigate','arguments':{'url':'http://127.0.0.1:'+str(server.server_port)}})
     assert not result.get('isError'),result
-    assert 'Saludar' in json.dumps(result,ensure_ascii=False)
+    ready=rpc(4,'tools/call',{'name':'browser_wait_for','arguments':{'text':'Saludar'}})
+    assert not ready.get('isError'),ready
+    snapshot=rpc(5,'tools/call',{'name':'browser_snapshot','arguments':{}})
+    assert 'Saludar' in json.dumps(snapshot,ensure_ascii=False),json.dumps(snapshot,ensure_ascii=False)[:4000]
     print('PLAYWRIGHT_MCP_NAVIGATION_OK')
 finally:
     process.terminate()
