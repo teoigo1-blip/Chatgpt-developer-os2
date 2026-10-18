@@ -2,9 +2,6 @@
 name: Build Live USB ISO
 
 on:
-  push:
-    branches: [codex/windows-iso]
-    paths: [".github/workflows/build-live-iso.yml"]
   workflow_dispatch:
     inputs:
       publish_release:
@@ -119,7 +116,23 @@ jobs:
           fi
 
       - name: Build Debian Live image
-        run: sudo ./ci-build-iso.sh "$PWD/dist"
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD:/workspace" -w /workspace \
+            debian:trixie bash -lc '
+              set -Eeuo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y live-build debootstrap debian-archive-keyring xorriso squashfs-tools syslinux-common isolinux grub-pc-bin grub-efi-amd64-bin mtools dosfstools file sudo ca-certificates
+              sudo ./ci-build-iso.sh "$PWD/dist"
+            '
+
+      - name: Restore artifact ownership for verification and diagnostics
+        if: always()
+        run: |
+          if [ -d dist ]; then
+            sudo chown -R "$(id -u):$(id -g)" dist
+          fi
 
       - name: Locate and verify artifact
         shell: bash
