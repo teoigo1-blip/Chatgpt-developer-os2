@@ -52,3 +52,5 @@ ripgrep
 bubblewrap
 libnss3
 libnspr4
+procps
+chromium
