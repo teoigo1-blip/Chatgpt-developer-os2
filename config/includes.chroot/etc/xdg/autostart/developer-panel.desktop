@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Developer Panel (manual)
+Exec=/usr/local/bin/developer-panel
+Hidden=true

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if ! command -v npm >/dev/null; then echo 'Falta npm. Instálalo con el gestor de paquetes.' >&2; exit 1; fi
+if [[ "${1:-}" != '--install' ]]; then
+ echo 'Instalación oficial optativa: developer-codex-install --install'; echo 'Paquete: @openai/codex (npm). Requiere conexión.'; exit 0
+fi
+read -r -p '¿Instalar Codex CLI desde npm en tu cuenta local? [s/N] ' reply
+[[ "$reply" == 's' || "$reply" == 'S' ]] || exit 0
+mkdir -p "$HOME/.local/npm"
+npm install --global --prefix "$HOME/.local/npm" @openai/codex
+printf '\nAñade a PATH: export PATH="$HOME/.local/npm/bin:$PATH"\nEjecuta: codex login\n'

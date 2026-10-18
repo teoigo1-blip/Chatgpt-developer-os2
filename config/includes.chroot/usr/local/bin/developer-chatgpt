@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Abre el sitio oficial de ChatGPT sin extraer credenciales."""
+import subprocess,shutil,sys
+browser=shutil.which('xdg-open')
+if not browser: sys.exit('No se encuentra xdg-open')
+sys.exit(subprocess.run([browser,'https://chatgpt.com/'],check=False).returncode)

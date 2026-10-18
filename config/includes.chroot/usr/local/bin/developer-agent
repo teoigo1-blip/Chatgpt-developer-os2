@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Acciones locales explícitas sobre X11. No es un agente visual autónomo."""
+import argparse, json, os, shutil, subprocess, sys
+from pathlib import Path
+STOP = Path.home()/'.local/share/developer-os/STOP'
+ALLOWED = ('xfce4-terminal','thunar','firefox-esr')
+def checked(cmd):
+    if STOP.exists(): raise SystemExit('Acciones bloqueadas: developer-agent resume')
+    if not os.environ.get('DISPLAY'): raise SystemExit('Requiere escritorio X11 activo')
+    if not shutil.which(cmd[0]): raise SystemExit('Herramienta ausente: '+cmd[0])
+    return subprocess.run(cmd,check=False).returncode
+def main():
+    p=argparse.ArgumentParser(description='Control local y supervisado del escritorio X11')
+    s=p.add_subparsers(dest='action',required=True)
+    for n in ('status','stop','resume'): s.add_parser(n)
+    s.add_parser('screenshot').add_argument('output')
+    s.add_parser('open').add_argument('program',choices=ALLOWED)
+    m=s.add_parser('move'); m.add_argument('x',type=int); m.add_argument('y',type=int)
+    c=s.add_parser('click'); c.add_argument('--button',type=int,choices=(1,2,3),default=1)
+    t=s.add_parser('type'); t.add_argument('text',help='Texto explícito, no comandos de shell')
+    k=s.add_parser('key'); k.add_argument('combination',help='Ejemplo: ctrl+s')
+    a=p.parse_args()
+    if a.action=='stop': STOP.parent.mkdir(parents=True,exist_ok=True); STOP.touch(); print('Acciones futuras bloqueadas'); return 0
+    if a.action=='resume': STOP.unlink(missing_ok=True); print('Acciones reanudadas'); return 0
+    if a.action=='status': print(json.dumps({'stopped':STOP.exists(),'display':os.environ.get('DISPLAY'),'xdotool':bool(shutil.which('xdotool')),'scrot':bool(shutil.which('scrot'))})); return 0
+    if a.action=='open': return checked([a.program])
+    if a.action=='screenshot':
+        out=Path(a.output).expanduser().resolve(); out.parent.mkdir(parents=True,exist_ok=True)
+        return checked(['scrot',str(out)])
+    if a.action=='move':
+        if not (0<=a.x<=16384 and 0<=a.y<=16384): p.error('Coordenadas fuera de rango')
+        return checked(['xdotool','mousemove',str(a.x),str(a.y)])
+    if a.action=='click': return checked(['xdotool','click',str(a.button)])
+    if a.action=='type':
+        if len(a.text)>4000: p.error('Texto demasiado largo')
+        return checked(['xdotool','type','--clearmodifiers','--delay','12','--',a.text])
+    if a.action=='key':
+        if len(a.combination)>80 or not all(ch.isalnum() or ch in '+_- ' for ch in a.combination): p.error('Tecla no válida')
+        return checked(['xdotool','key','--clearmodifiers',a.combination])
+    return 2
+if __name__=='__main__': sys.exit(main())

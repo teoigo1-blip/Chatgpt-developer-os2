@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=ChatGPT Developer OS - Bienvenida
+Comment=Herramientas y acceso a Codex
+Exec=xfce4-terminal --title="ChatGPT Developer OS" --hold --command=/usr/local/bin/developer-welcome
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true
+Terminal=false
