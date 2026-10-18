@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if command -v codex >/dev/null && [[ "${1:-}" != '--install' ]]; then
+ codex --version
+ echo 'Codex ya está instalado. Inicia sesión con developer-codex login.'
+ exit 0
+fi
 if ! command -v npm >/dev/null; then echo 'Falta npm. Instálalo con el gestor de paquetes.' >&2; exit 1; fi
 if [[ "${1:-}" != '--install' ]]; then
  echo 'Instalación oficial optativa: developer-codex-install --install'; echo 'Paquete: @openai/codex (npm). Requiere conexión.'; exit 0

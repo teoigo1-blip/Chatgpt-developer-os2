@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""Exercise installed tools offline, without accounts or user projects."""
+import argparse
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
+import time
+
+def run_checks(output):
+    results=[]
+    env={**os.environ,'JAVA_HOME':'/usr/lib/jvm/java-21-openjdk-amd64','ANDROID_HOME':'/opt/android-sdk','ANDROID_SDK_ROOT':'/opt/android-sdk'}
+    with tempfile.TemporaryDirectory(prefix='developer-smoke-') as tmp:
+        root=Path(tmp)
+        (root/'hello.c').write_text('int main(void){return 0;}\n')
+        (root/'Hello.java').write_text('public class Hello {public static void main(String[] a){System.out.println("JAVA_OK");}}\n')
+        (root/'MainActivity.java').write_text('package dev.smoke; public class MainActivity extends android.app.Activity {}\n')
+        (root/'AndroidManifest.xml').write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.smoke"><application android:label="Smoke"><activity android:name=".MainActivity" android:exported="true"/></application></manifest>\n')
+        (root/'dex').mkdir()
+        checks=[
+          ('codex',['codex','--version'],30),
+          ('python',['python3','-c','import venv,tkinter; print("PYTHON_OK")'],20),
+          ('node',['node','--version'],20),
+          ('npm',['npm','--version'],20),
+          ('git',['git','--version'],20),
+          ('java-compile',['javac','Hello.java'],30),
+          ('java-run',['java','Hello'],30),
+          ('gradle',['gradle','--offline','--no-daemon','--version'],60),
+          ('linux-compile',['gcc','hello.c','-o','hello'],30),
+          ('linux-run',[str(root/'hello')],20),
+          ('windows-compile',['x86_64-w64-mingw32-gcc','hello.c','-o','hello.exe'],30),
+          ('windows-format',['file','hello.exe'],20),
+          ('cmake',['cmake','--version'],20),
+          ('ninja',['ninja','--version'],20),
+          ('clang',['clang','--version'],20),
+          ('lld',['ld.lld','--version'],20),
+          ('adb',['adb','version'],20),
+          ('fastboot',['fastboot','--version'],20),
+          ('apktool',['apktool','--version'],30),
+          ('android-java',['javac','--release','8','-classpath','/opt/android-sdk/platforms/android-36/android.jar','-d',str(root),'MainActivity.java'],30),
+          ('android-dex',['d8','--min-api','23','--lib','/opt/android-sdk/platforms/android-36/android.jar','--output',str(root/'dex'),str(root/'dev/smoke/MainActivity.class')],60),
+          ('android-resources',['aapt2','link','-I','/opt/android-sdk/platforms/android-36/android.jar','--manifest','AndroidManifest.xml','--min-sdk-version','23','--target-sdk-version','36','-o','unsigned.apk'],30),
+          ('android-package',['zip','-j','unsigned.apk',str(root/'dex/classes.dex')],20),
+          ('android-align',['zipalign','-f','4','unsigned.apk','aligned.apk'],30),
+          ('android-test-key',['keytool','-genkeypair','-keystore','test.jks','-storepass','smoke-only-password','-keypass','smoke-only-password','-alias','test','-dname','CN=Temporary offline test','-keyalg','RSA','-validity','1','-noprompt'],30),
+          ('android-sign',['apksigner','sign','--ks','test.jks','--ks-key-alias','test','--ks-pass','pass:smoke-only-password','--key-pass','pass:smoke-only-password','--out','smoke.apk','aligned.apk'],60),
+          ('android-verify',['apksigner','verify','--verbose','smoke.apk'],30),
+          ('jadx',['jadx','--version'],60),
+          ('jadx-decompile',['jadx','--no-res','-d',str(root/'decompiled'),str(root/'smoke.apk')],90),
+          ('ghidra-analyze',['ghidra-headless',str(root),'Smoke','-import',str(root/'hello'),'-deleteProject'],180),
+          ('gdb',['gdb','--version'],20),
+          ('wine',['wine','--version'],30)]
+        for name,cmd,timeout in checks:
+            start=time.monotonic()
+            try:
+                result=subprocess.run(cmd,cwd=root,env=env,capture_output=True,text=True,timeout=timeout)
+                success=result.returncode==0
+                detail=(result.stdout+result.stderr)[-12000:]
+                if name=='windows-format': success=success and 'PE32+' in detail
+                if name=='java-run': success=success and 'JAVA_OK' in detail
+                if name=='jadx-decompile': success=success and any((root/'decompiled').rglob('MainActivity.java'))
+            except (OSError,subprocess.TimeoutExpired) as exc:
+                success=False; detail=str(exc)
+            results.append({'test':name,'passed':success,'seconds':round(time.monotonic()-start,2),'detail':detail})
+            print(('PASS' if success else 'FAIL')+': '+name,flush=True)
+    report={'all_passed':all(x['passed'] for x in results),'checks':results,'account_login_tested':False}
+    if output:
+        Path(output).parent.mkdir(parents=True,exist_ok=True)
+        Path(output).write_text(json.dumps(report,indent=2)+'\n')
+    return 0 if report['all_passed'] else 1
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(); parser.add_argument('--output'); args=parser.parse_args()
+    raise SystemExit(run_checks(args.output))
