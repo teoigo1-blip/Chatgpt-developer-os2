@@ -81,6 +81,7 @@ jobs:
             dosfstools \
             qemu-system-x86 \
             ovmf \
+            cryptsetup-bin \
             file
 
       - name: Check build host and free space
@@ -172,6 +173,17 @@ jobs:
 
       - name: Test UEFI kernel boot
         run: ./ci-qemu-boot.sh release.iso uefi 300
+
+      - name: Test encrypted persistence across two boots
+        run: python3 ci-persistence-test.py release.iso
+
+      - name: Upload persistence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistence-evidence
+          path: dist/persistence-evidence/
+          if-no-files-found: ignore
 
       - name: Upload boot evidence
         if: always()
