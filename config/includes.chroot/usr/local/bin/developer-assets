@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""Install the authored Spanish guide and offline examples at image-build time."""
+from pathlib import Path
+ASSETS = {'examples/AGENTS.md': '# Entorno de desarrollo\n'
+                       'Responde en español salvo que el usuario pida otro idioma.\n'
+                       'Antes de modificar un proyecto, lee sus instrucciones y conserva sus archivos.\n'
+                       'Usa las herramientas instaladas y ejecuta pruebas apropiadas a los cambios.\n'
+                       'No publiques APK con las claves temporales de los ejemplos.\n'
+                       'El manual local está en /usr/local/share/developer-os/guia.html.\n',
+ 'examples/android-demo/AndroidManifest.xml': '<manifest '
+                                              'xmlns:android="http://schemas.android.com/apk/res/android" '
+                                              'package="dev.ejemplo"><application android:label="Ejemplo '
+                                              'Developer OS"><activity android:name=".MainActivity" '
+                                              'android:exported="true"><intent-filter><action '
+                                              'android:name="android.intent.action.MAIN"/><category '
+                                              'android:name="android.intent.category.LAUNCHER"/></intent-filter></activity></application></manifest>\n',
+ 'examples/android-demo/MainActivity.java': 'package dev.ejemplo;\n'
+                                            'public class MainActivity extends android.app.Activity {\n'
+                                            '    @Override public void onCreate(android.os.Bundle state) {\n'
+                                            '        super.onCreate(state);\n'
+                                            '        android.widget.TextView text = new '
+                                            'android.widget.TextView(this);\n'
+                                            '        text.setText("Hola desde Developer OS");\n'
+                                            '        setContentView(text);\n'
+                                            '    }\n'
+                                            '}\n',
+ 'examples/android-demo/build.sh': '#!/bin/bash\n'
+                                   'set -Eeuo pipefail\n'
+                                   'cd -- "$(dirname -- "${BASH_SOURCE[0]}")"\n'
+                                   "test ! -e build || { echo 'La carpeta build ya existe; consérvala o "
+                                   "renómbrala antes de repetir.'; exit 1; }\n"
+                                   'mkdir -p build/classes build/dex\n'
+                                   'javac --release 8 -classpath '
+                                   '"$ANDROID_HOME/platforms/android-36/android.jar" -d build/classes '
+                                   'MainActivity.java\n'
+                                   'd8 --min-api 23 --lib "$ANDROID_HOME/platforms/android-36/android.jar" '
+                                   '--output build/dex build/classes/dev/ejemplo/MainActivity.class\n'
+                                   'aapt2 link -I "$ANDROID_HOME/platforms/android-36/android.jar" '
+                                   '--manifest AndroidManifest.xml --min-sdk-version 23 --target-sdk-version '
+                                   '36 -o build/unsigned.apk\n'
+                                   'zip -j build/unsigned.apk build/dex/classes.dex\n'
+                                   'zipalign -f 4 build/unsigned.apk build/aligned.apk\n'
+                                   'keytool -genkeypair -keystore build/demo.jks -storepass ejemplo-temporal '
+                                   '-keypass ejemplo-temporal -alias demo -dname CN=Ejemplo -keyalg RSA '
+                                   '-validity 2 -noprompt\n'
+                                   'apksigner sign --ks build/demo.jks --ks-pass pass:ejemplo-temporal --out '
+                                   'build/ejemplo.apk build/aligned.apk\n'
+                                   'apksigner verify --verbose build/ejemplo.apk\n'
+                                   "echo 'APK: build/ejemplo.apk. La clave generada es solo para este "
+                                   "ejemplo; no la uses para publicar.'\n",
+ 'examples/native-demo/README.md': '# Ejemplo Linux y Windows\n'
+                                   'Linux: `gcc main.c -o saludo` y `./saludo`.\n'
+                                   'Windows: `x86_64-w64-mingw32-gcc main.c -o saludo.exe`.\n'
+                                   'Puedes pedir a Codex que modifique el programa y ejecute sus pruebas.\n',
+ 'examples/native-demo/main.c': '#include <stdio.h>\n'
+                                'int main(void) { puts("Hola desde Developer OS"); return 0; }\n',
+ 'examples/python-demo/app.py': 'def sumar(a, b):\n'
+                                '    return a + b\n'
+                                '\n'
+                                "if __name__ == '__main__':\n"
+                                "    print('Hola desde ChatGPT Developer OS:', sumar(2, 3))\n",
+ 'examples/python-demo/pyproject.toml': '[project]\n'
+                                        'name = "ejemplo-developer-os"\n'
+                                        'version = "1.0.0"\n'
+                                        'requires-python = ">=3.11"\n'
+                                        'dependencies = []\n',
+ 'examples/python-demo/test_app.py': 'from app import sumar\n'
+                                     '\n'
+                                     'def test_sumar():\n'
+                                     '    assert sumar(2, 3) == 5\n',
+ 'examples/web-demo/index.html': '<!doctype html><html lang="es"><meta charset="utf-8"><title>Ejemplo '
+                                 'web</title>\n'
+                                 '<body><h1>Hola desde Developer OS</h1><button '
+                                 'id="saludar">Saludar</button>\n'
+                                 '<p '
+                                 'id="resultado"></p><script>document.querySelector(\'#saludar\').onclick=()=>document.querySelector(\'#resultado\').textContent=\'¡Funciona!\';</script></body></html>\n',
+ 'guia.html': '<!doctype html><html lang="es"><meta charset="utf-8"><title>Guía de Developer OS</title>\n'
+              '<style>body{font:18px system-ui;max-width:850px;margin:40px '
+              'auto;line-height:1.6;padding:20px}code{background:#eee;padding:3px}h1,h2{color:#14536b}</style>\n'
+              '<h1>Tu entorno de desarrollo</h1>\n'
+              '<p>Abre el Panel de Developer OS desde el menú para acceder a las herramientas.</p>\n'
+              '<h2>Primeros pasos</h2><ol><li>Conecta la red.</li><li>Abre «Iniciar sesión en Codex» y usa '
+              'tu cuenta de ChatGPT.</li><li>Abre un proyecto con el editor o elige un ejemplo.</li><li>Pide '
+              'a Codex un cambio concreto y revisa el resultado.</li></ol>\n'
+              '<h2>Herramientas</h2><p>El editor incluye Codex y el idioma español. REA está conectado con '
+              'Ghidra y JADX para análisis. Playwright sirve para probar páginas. Python incluye uv, Ruff y '
+              'pytest. ShellCheck comprueba scripts. Podman ejecuta contenedores; scrcpy muestra un Android '
+              'conectado y autorizado.</p>\n'
+              '<h2>Ejemplos sin conexión</h2><p>Ejecuta <code>developer-demos</code>. En Projects/Ejemplos '
+              'encontrarás Python, una web, C para Linux/Windows y una APK Android. Python: '
+              '<code>pytest</code>. Web: abre index.html. Android: <code>bash build.sh</code>. Las claves '
+              'del ejemplo Android son desechables.</p>\n'
+              '<h2>Guardar al apagar</h2><p>La ISO es de solo lectura. El guardado permanente requiere una '
+              'partición aparte, preparada como persistencia. El asistente cifrado muestra solo particiones '
+              'USB desmontadas y pide escribir la ruta antes de borrar esa partición. Crea antes una copia '
+              'de los datos del USB. La contraseña se introduce de forma interactiva y no se guarda en la '
+              'ISO. Sin persistencia, los cambios de la sesión se pierden al apagar.</p>\n'
+              '<h2>Copias de seguridad</h2><p>Conecta otro disco y configura una carpeta de copias desde el '
+              'panel. Restic cifra los proyectos y ajustes con tu contraseña. Guarda la contraseña por tu '
+              'cuenta. Usa «Comprobar copia» y prueba «Recuperar»; la recuperación se hace en una carpeta '
+              'nueva, sin sobrescribir proyectos. Las credenciales de inicio de sesión no se incluyen en la '
+              'copia predeterminada.</p>\n'
+              '<h2>Compilar más rápido</h2><p>Los proyectos C/C++ usan ccache cuando lo habilitas en CMake o '
+              'invocas gcc/clang desde la terminal de desarrollo. La caché tiene un máximo de 1 GiB por '
+              'usuario. El primer build no se acelera. Las cachés y dependencias se conservan entre '
+              'reinicios solo con persistencia.</p>\n'
+              '<h2>Con y sin Internet</h2><p>Los ejemplos, compiladores y esta guía funcionan sin Internet. '
+              'Codex necesita conexión para tu cuenta. El servidor de documentación oficial consulta '
+              'Internet. Cada proyecto nuevo puede necesitar descargar sus propias dependencias. No se '
+              'incluyen cuentas, claves API ni modelos de IA locales.</p>\n'
+              '<h2>Diagnóstico</h2><p>Ejecuta <code>developer-doctor --strict</code> y '
+              '<code>developer-enhancement-test</code>. <code>developer-container-test</code> prueba un '
+              'contenedor desechable sin red. El Android conectado, tu hardware y tu USB deben comprobarse '
+              'en tu equipo.</p>\n'
+              '<h2>Fuentes</h2><ul><li>learn.chatgpt.com/docs/codex/ide</li><li>developers.openai.com/learn/docs-mcp</li><li>playwright.dev/python/docs/intro</li><li>docs.astral.sh/uv</li><li>github.com/Genymobile/scrcpy</li><li>restic.net</li><li>ccache.dev</li><li>docs.podman.io</li><li>live-team.pages.debian.net/live-manual</li></ul></html>\n'}
+root=Path('/usr/local/share/developer-os')
+for name,text in ASSETS.items():
+    path=root/name
+    path.parent.mkdir(parents=True,exist_ok=True)
+    path.write_text(text,encoding='utf-8')

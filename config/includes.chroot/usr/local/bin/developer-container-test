@@ -1,0 +1,11 @@
+#!/usr/bin/env python3
+"""Run a bundled disposable container offline using ordinary Podman isolation."""
+import subprocess,tempfile
+from pathlib import Path
+with tempfile.TemporaryDirectory(prefix='developer-podman-') as tmp:
+    cmd=['podman','--storage-driver=vfs','--root',tmp+'/storage','--runroot',tmp+'/run']
+    try:
+        subprocess.run([*cmd,'import','/usr/local/share/developer-os/busybox-rootfs.tar','localhost/developer-smoke:1'],check=True)
+        result=subprocess.check_output([*cmd,'run','--rm','--network=none','localhost/developer-smoke:1','/bin/busybox','echo','CONTAINER_OK'],text=True)
+        assert 'CONTAINER_OK' in result;print('CONTAINER_OK')
+    finally:subprocess.run([*cmd,'image','rm','--force','localhost/developer-smoke:1'],check=False,stdout=subprocess.DEVNULL)

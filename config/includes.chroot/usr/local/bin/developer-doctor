@@ -4,7 +4,7 @@ import argparse,json,os,shutil,sys,tomllib
 from pathlib import Path
 
 def inspect():
-    commands=('git','python3','node','npm','java','javac','gradle','adb','fastboot','apktool','sdkmanager','aapt2','d8','apksigner','zipalign','cmake','ninja','gcc','clang','ld.lld','x86_64-w64-mingw32-gcc','wine','gdb','codex','rea','jadx','jadx-gui','ghidra','ghidra-headless','xdotool','scrot','chromium')
+    commands=('git','python3','node','npm','java','javac','gradle','adb','fastboot','apktool','sdkmanager','aapt2','d8','apksigner','zipalign','cmake','ninja','gcc','clang','ld.lld','x86_64-w64-mingw32-gcc','wine','gdb','codex','rea','jadx','jadx-gui','ghidra','ghidra-headless','xdotool','scrot','chromium','code','uv','ruff','pytest','playwright','playwright-mcp','shellcheck','scrcpy','podman','restic','ccache','cryptsetup','jq','sqlite3')
     tools={name:shutil.which(name) for name in commands}
     sdk=Path(os.environ.get('ANDROID_HOME','/opt/android-sdk'))
     android={'root':str(sdk),'platform_36':(sdk/'platforms/android-36/android.jar').is_file(),'build_tools_36':(sdk/'build-tools/36.0.0/aapt2').is_file(),'license':(sdk/'licenses/android-sdk-license').is_file()}

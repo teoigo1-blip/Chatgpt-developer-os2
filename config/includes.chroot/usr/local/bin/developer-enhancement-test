@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Functional, local tests of the productivity tools; no accounts or paid calls."""
+import argparse,json,os,re,shutil,subprocess,tempfile,time
+from pathlib import Path
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--output',type=Path);a=p.parse_args();checks=[]
+    def check(name,fn):
+        start=time.monotonic()
+        try:detail=fn();ok=True
+        except Exception as e:detail=str(e);ok=False
+        checks.append({'test':name,'passed':ok,'seconds':round(time.monotonic()-start,2),'detail':str(detail)[-5000:]})
+        print(('PASS: ' if ok else 'FAIL: ')+name,flush=True)
+        if not ok:print(str(detail)[-5000:],flush=True)
+    with tempfile.TemporaryDirectory(prefix='developer-enhancement-') as tmp:
+        root=Path(tmp);env={**os.environ,'PLAYWRIGHT_BROWSERS_PATH':'/opt/developer-os/playwright-browsers','CCACHE_DIR':str(root/'ccache')}
+        def run(cmd,timeout=120,**kw):
+            r=subprocess.run(cmd,env=kw.pop('env',env),text=True,capture_output=True,timeout=timeout,**kw)
+            if r.returncode:raise RuntimeError(' '.join(cmd)+'\n'+r.stdout+'\n'+r.stderr)
+            return r.stdout+r.stderr
+        def backup():
+            e={**env,'RESTIC_PASSWORD':'disposable-offline-test-only'};repo=root/'backup';source=root/'source';source.mkdir();(source/'hola.txt').write_text('Proyecto recuperado')
+            run(['restic','-r',str(repo),'init'],env=e)
+            run(['restic','-r',str(repo),'backup',str(source)],env=e)
+            run(['restic','-r',str(repo),'check','--read-data'],env=e)
+            dest=root/'restored';run(['restic','-r',str(repo),'restore','latest','--target',str(dest)],env=e)
+            assert any(x.read_text()=='Proyecto recuperado' for x in dest.rglob('hola.txt'))
+            return 'Encrypted repository checked and a real file restored'
+        def cache():
+            c=root/'hello.c';c.write_text('int main(void){return 0;}')
+            for _ in range(2):run(['ccache','gcc','-c',str(c),'-o',str(root/'hello.o')])
+            stats=run(['ccache','--print-stats']);assert re.search(r'(direct_cache_hit|preprocessed_cache_hit)\s+[1-9]',stats)
+            return stats
+        def python():
+            demo=root/'python';shutil.copytree('/usr/local/share/developer-os/examples/python-demo',demo)
+            return run(['pytest','-q',str(demo)])+run(['ruff','check',str(demo)])+run(['uv','venv','--python','/usr/bin/python3',str(root/'venv')])
+        def browser():
+            script=root/'browser.py'
+            script.write_text("""from playwright.sync_api import sync_playwright
+import os
+with sync_playwright() as p:
+    browser=p.chromium.launch(headless=True,args=['--no-sandbox'] if os.geteuid()==0 else [])
+    page=browser.new_page()
+    page.goto('file:///usr/local/share/developer-os/examples/web-demo/index.html')
+    page.get_by_role('button',name='Saludar').click()
+    assert page.locator('#resultado').inner_text()=='¡Funciona!'
+    page.screenshot(path="""+repr(str(root/'web.png'))+""")
+    browser.close()
+print('PLAYWRIGHT_CLICK_OK')
+""")
+            return run(['/opt/developer-os/python-tools/bin/python',str(script)])
+        def registration():
+            import tomllib
+            config=tomllib.loads(Path('/etc/skel/.codex/config.toml').read_text())
+            assert config['mcp_servers']['openaiDeveloperDocs']['url']=='https://developers.openai.com/mcp'
+            assert config['mcp_servers']['playwright']['command']=='/usr/local/bin/playwright-mcp'
+            extensions=Path('/etc/skel/.vscode/extensions')
+            assert any(extensions.glob('openai.chatgpt-*')) and any(extensions.glob('ms-ceintl.vscode-language-pack-es-*'))
+            return 'Codex MCP documentation and browser configured; editor has Codex and Spanish language pack'
+        check('editor-and-codex-configuration',registration)
+        check('python-example-tests-and-lint',python)
+        check('playwright-real-click-and-screenshot',browser)
+        check('shellcheck-android-example',lambda:run(['shellcheck','/usr/local/share/developer-os/examples/android-demo/build.sh']))
+        check('android-example-apk',lambda:(shutil.copytree('/usr/local/share/developer-os/examples/android-demo',root/'android'),run(['bash',str(root/'android/build.sh')]))[1])
+        check('encrypted-backup-and-restore',backup)
+        check('compiler-cache-hit',cache)
+        check('scrcpy-installed',lambda:run(['scrcpy','--version']))
+        check('playwright-mcp-cli',lambda:run(['playwright-mcp','--help']))
+        check('playwright-mcp-real-navigation',lambda:run(['developer-browser-test'],timeout=180))
+        check('podman-installed',lambda:run(['podman','--version']))
+        check('dashboard-starts',lambda:run(['xvfb-run','-a','developer-dashboard','--self-test']))
+    report={'all_passed':all(x['passed'] for x in checks),'checks':checks,'account_login_tested':False,'physical_android_tested':False}
+    if a.output:a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(report,indent=2)+'\n')
+    return 0 if report['all_passed'] else 1
+if __name__=='__main__':raise SystemExit(main())
