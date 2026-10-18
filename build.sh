@@ -14,7 +14,7 @@ lb config \
   --debian-installer none \
   --archive-areas 'main contrib non-free non-free-firmware' \
   --bootloaders 'grub-efi syslinux' \
-  --bootappend-live 'boot=live components persistence persistence-label=persistence locales=es_ES.UTF-8 keyboard-layouts=es console=tty0 console=ttyS0,115200n8' \
+  --bootappend-live 'boot=live components persistence persistence-label=persistence persistence-encryption=none,luks locales=es_ES.UTF-8 keyboard-layouts=es console=tty0 console=ttyS0,115200n8' \
   --iso-application 'ChatGPT Developer OS' \
   --iso-publisher 'Community build' \
   --image-name chatgpt-developer-os

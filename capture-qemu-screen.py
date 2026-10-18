@@ -32,7 +32,7 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         with serial_input.open('w',buffering=1) as terminal:
             terminal.write('user\n'); time.sleep(5)
             terminal.write('live\n'); time.sleep(5)
-            terminal.write(". /etc/profile.d/developer-toolchain.sh; developer-doctor --json; if developer-doctor --strict; then printf '\\nGUEST_TOOLCHECK_OK\\n'; else printf '\\nGUEST_TOOLCHECK_FAILED\\n'; fi; codex --version; jadx --version; sdkmanager --version; cat /usr/local/share/developer-os/toolchain-smoke.json; DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority jadx-gui >/tmp/jadx-gui.log 2>&1 &\n")
+            terminal.write(". /etc/profile.d/developer-toolchain.sh; developer-doctor --json; if developer-doctor --strict; then printf '\\nGUEST_TOOLCHECK_OK\\n'; else printf '\\nGUEST_TOOLCHECK_FAILED\\n'; fi; codex --version; jadx --version; sdkmanager --version; cat /usr/local/share/developer-os/toolchain-smoke.json; cat /usr/local/share/developer-os/enhancement-smoke.json; if developer-container-test; then echo GUEST_CONTAINER_OK; else echo GUEST_CONTAINER_FAILED; fi; DISPLAY=:0 XAUTHORITY=$HOME/.Xauthority developer-dashboard >/tmp/developer-dashboard.log 2>&1 &\n")
         time.sleep(max(1,seconds-140))
     else:
         time.sleep(max(1, seconds - 30))

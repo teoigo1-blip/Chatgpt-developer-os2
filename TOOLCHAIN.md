@@ -40,3 +40,31 @@ Sources:
 - https://services.gradle.org/distributions/gradle-8.14.3-bin.zip.sha256
 - https://github.com/morluto/rea
 - https://nodejs.org/en/blog/release/v24.22.0
+
+## Productivity and recovery edition
+
+Adds the official VS Code package with Codex and Spanish language extensions,
+uv/Ruff/pytest, Playwright with its bundled headless browser and a configured MCP,
+ShellCheck, scrcpy 5.0.1, Podman rootless prerequisites, Restic, ccache, jq and SQLite.
+The official OpenAI documentation MCP is configured without an API key.
+VS Code is fetched from Microsoft's official HTTPS update metadata and its SHA256
+is checked; its exact version and hash are recorded in productivity-lock.json.
+Python and Playwright MCP versions are recorded alongside the build reports.
+
+The Spanish dashboard launches tools in visible terminals. Offline examples cover
+Python, web, Android and native Linux/Windows builds. The local guide explains
+account login, backups, cache, containers and persistence. ccache is capped at
+1 GiB per user. Restic recovery always targets a new directory; credentials are
+not included in the default backup inputs. Users choose and protect the backup
+password themselves.
+
+USB encryption requires a user-selected, unmounted leaf partition on USB/removable
+media, explicit confirmation of its path and interactive cryptsetup passphrases.
+No physical disk is selected automatically. CI tests use an exclusively-created
+new image file with a public disposable test-only key, never a user partition.
+The image enables persistence-encryption=none,luks. Physical USB/hardware and
+personal account login must still be checked by the owner.
+
+Sources: code.visualstudio.com/docs/setup/linux; playwright.dev/python;
+github.com/microsoft/playwright-mcp; docs.astral.sh; restic.net; ccache.dev;
+docs.podman.io; github.com/Genymobile/scrcpy; Debian Live manual.

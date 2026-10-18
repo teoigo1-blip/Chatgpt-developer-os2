@@ -9,7 +9,7 @@ seconds=${3:-300}
 [[ -s "$iso" && "$seconds" =~ ^[0-9]+$ && "$seconds" -ge 180 ]] || { echo 'ISO o duración no válida (mínimo 180 segundos)' >&2; exit 2; }
 [[ "$mode" == bios || "$mode" == uefi ]] || { echo 'Modo inválido' >&2; exit 2; }
 for cmd in qemu-system-x86_64 timeout grep; do command -v "$cmd" >/dev/null || { echo "Falta $cmd" >&2; exit 2; }; done
-args=(-m 2048 -smp 2 -boot d -cdrom "$iso" -nic none -display none -monitor none -serial stdio -no-reboot)
+args=(-m 4096 -smp 2 -boot d -cdrom "$iso" -nic none -display none -monitor none -serial stdio -no-reboot)
 if [[ "$mode" == uefi ]]; then
  firmware=''
  for candidate in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/ovmf/OVMF.fd; do
@@ -35,6 +35,7 @@ status=$?
 set -e
 # Preserve the complete serial output in the caller's boot-evidence log.
 cat "$log"
+if ! grep -q '^GUEST_CONTAINER_OK' "$log"; then echo 'FAIL: rootless container test'; exit 1; fi
 if ! grep -q '^GUEST_TOOLCHECK_OK' "$log"; then
  echo "FAIL: $mode: installed tools were not confirmed inside the running ISO" >&2
  exit 1
