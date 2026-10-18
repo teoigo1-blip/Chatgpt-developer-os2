@@ -7,7 +7,7 @@ import sys
 import time
 
 address, destination, seconds = sys.argv[1], Path(sys.argv[2]).resolve(), int(sys.argv[3])
-time.sleep(max(1, seconds - 15))
+time.sleep(15)
 destination.parent.mkdir(parents=True, exist_ok=True)
 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
     connection.settimeout(8)
@@ -23,6 +23,10 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
             if 'error' in response: raise RuntimeError(response['error'])
             if 'return' in response: return response['return']
     command('qmp_capabilities')
+    command('screendump',{'filename':str(destination.with_name(destination.stem+'-menu.ppm'))})
+    command('send-key',{'keys':[{'type':'qcode','data':'ret'}]})
+    print('Selected the default Live system menu entry with Enter.')
+    time.sleep(max(1, seconds - 30))
     status=command('query-status')
     command('screendump',{'filename':str(destination)})
     destination.with_suffix('.json').write_text(json.dumps({'vm_status':status,'framebuffer':destination.name,'observation':'Framebuffer only; no automated desktop functionality claim.'},indent=2)+'\n')
