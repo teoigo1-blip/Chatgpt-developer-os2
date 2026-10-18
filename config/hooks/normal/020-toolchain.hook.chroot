@@ -1,0 +1,93 @@
+#!/bin/bash
+set -Eeuo pipefail
+export DEBIAN_FRONTEND=noninteractive
+mkdir -p /opt/developer-os /usr/local/share/developer-os /usr/local/bin
+python3 - <<'PY'
+import hashlib, json, pathlib, subprocess, tempfile, urllib.request, zipfile
+assets=[
+ ('jadx','1.5.6','https://github.com/skylot/jadx/releases/download/v1.5.6/jadx-1.5.6.zip','545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974','/opt/developer-os/jadx'),
+ ('ghidra','12.1.4','https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_12.1.4_build/ghidra_12.1.4_PUBLIC_20260921.zip','ddac49f903da9d5bac833e5cc79395098b9c33cfd3279be5f31bd00387d2d4db','/opt/developer-os'),
+ ('gradle','8.14.3','https://services.gradle.org/distributions/gradle-8.14.3-bin.zip','bd71102213493060956ec229d946beee57158dbd89d0e62b91bca0fa2c5f3531','/opt/developer-os'),
+ ('android-command-line-tools','15859902','https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip','4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583','/opt/android-sdk/cmdline-tools')]
+for name,version,url,expected,destination in assets:
+    print('Installing pinned tool:',name,version,flush=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        archive=pathlib.Path(tmp)/'package.zip'
+        subprocess.run(['curl','--fail','--location','--retry','4','--connect-timeout','30','--max-time','1200','--output',str(archive),url],check=True)
+        with archive.open('rb') as stream: actual=hashlib.file_digest(stream,'sha256').hexdigest()
+        if actual!=expected: raise SystemExit('Checksum mismatch: '+name)
+        target=pathlib.Path(destination); target.mkdir(parents=True,exist_ok=True)
+        with zipfile.ZipFile(archive) as z:
+            for info in z.infolist():
+                path=(target/info.filename).resolve()
+                if not path.is_relative_to(target.resolve()): raise SystemExit('Unsafe archive entry')
+            z.extractall(target)
+pathlib.Path('/usr/local/share/developer-os/toolchain-lock.json').write_text(json.dumps([{'tool':a[0],'version':a[1],'url':a[2],'sha256':a[3]} for a in assets]+[{'tool':'codex','version':'0.163.0','source':'https://registry.npmjs.org/@openai/codex/0.163.0'}],indent=2)+'\n')
+PY
+chmod +x /opt/developer-os/jadx/bin/* /opt/developer-os/gradle-8.14.3/bin/gradle
+find /opt/developer-os/ghidra_12.1.4_PUBLIC -type f \( -name '*.sh' -o -name ghidraRun -o -name analyzeHeadless -o -name decompile -o -name sleigh -o -name server -o -name jsv \) -exec chmod +x {} +
+ln -sfn /opt/developer-os/jadx/bin/jadx /usr/local/bin/jadx
+ln -sfn /opt/developer-os/jadx/bin/jadx-gui /usr/local/bin/jadx-gui
+ln -sfn /opt/developer-os/gradle-8.14.3/bin/gradle /usr/local/bin/gradle
+ln -sfn /opt/developer-os/ghidra_12.1.4_PUBLIC/ghidraRun /usr/local/bin/ghidra
+ln -sfn /opt/developer-os/ghidra_12.1.4_PUBLIC/support/analyzeHeadless /usr/local/bin/ghidra-headless
+npm install --global --no-audit --no-fund @openai/codex@0.163.0
+codex --version
+mv /opt/android-sdk/cmdline-tools/cmdline-tools /opt/android-sdk/cmdline-tools/latest
+chmod +x /opt/android-sdk/cmdline-tools/latest/bin/*
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+# Personal SDK build requested by the owner; SDK license accepted explicitly in chat.
+# The release publishing option stays disabled. Do not publish this personal image.
+python3 - <<'PY'
+import subprocess
+sdk='/opt/android-sdk/cmdline-tools/latest/bin/sdkmanager'
+subprocess.run([sdk,'--sdk_root=/opt/android-sdk','--licenses'],input='y\n'*100,text=True,check=True)
+subprocess.run([sdk,'--sdk_root=/opt/android-sdk','platform-tools','platforms;android-36','build-tools;36.0.0'],check=True)
+PY
+cat > /etc/profile.d/developer-toolchain.sh <<'ENV'
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export ANDROID_HOME=/opt/android-sdk
+export ANDROID_SDK_ROOT="$ANDROID_HOME"
+export PATH="/usr/local/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/36.0.0:$PATH"
+ENV
+cat > /etc/X11/Xsession.d/90developer-toolchain <<'ENV'
+. /etc/profile.d/developer-toolchain.sh
+ENV
+for tool in sdkmanager avdmanager; do
+  ln -sfn "/opt/android-sdk/cmdline-tools/latest/bin/$tool" "/usr/local/bin/$tool"
+done
+for tool in aapt2 d8 apksigner zipalign; do
+  ln -sfn "/opt/android-sdk/build-tools/36.0.0/$tool" "/usr/local/bin/$tool"
+done
+mkdir -p /etc/skel/.codex /etc/skel/Projects /etc/skel/.android
+cat > /etc/skel/.codex/config.toml <<'CONFIG'
+forced_login_method = "chatgpt"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+CONFIG
+touch /etc/skel/.android/repositories.cfg
+mkdir -p /usr/share/applications
+for tool in jadx-gui ghidra; do
+cat > "/usr/share/applications/developer-$tool.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=$tool
+Exec=$tool
+Terminal=false
+Categories=Development;
+DESKTOP
+done
+cat > /usr/share/applications/developer-codex-login.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Iniciar sesión en Codex
+Exec=xfce4-terminal --disable-server --command="developer-codex login"
+Terminal=false
+Categories=Development;
+DESKTOP
+chmod 755 /usr/local/bin/developer-*
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+. /etc/profile.d/developer-toolchain.sh
+developer-doctor --strict
+developer-smoke-test --output /usr/local/share/developer-os/toolchain-smoke.json
+npm cache clean --force
