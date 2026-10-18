@@ -54,17 +54,17 @@ jobs:
             file
 
       - name: Check build host and free space
-        run: bash ./ci-environment-check.sh
+        run: ./ci-environment-check.sh
 
       - name: Validate scripts and configuration
         run: |
-          bash ./prebuild-gate.sh
+          ./prebuild-gate.sh
           bash -n build.sh ci-build-iso.sh ci-qemu-boot.sh github-preflight.sh
-          bash ./github-preflight.sh
+          ./github-preflight.sh
           python3 ./check-build-inputs.py
           python3 ./validate-workflow.py
           python3 ./check-target-packages.py
-          bash ./verify-boot-config.sh
+          ./verify-boot-config.sh
 
       - name: Check workflow and shell syntax
         run: |
@@ -86,7 +86,7 @@ jobs:
           fi
 
       - name: Build Debian Live image
-        run: sudo bash ./ci-build-iso.sh "$PWD/dist"
+        run: sudo ./ci-build-iso.sh "$PWD/dist"
 
       - name: Locate and verify artifact
         shell: bash
@@ -98,8 +98,8 @@ jobs:
             exit 1
           fi
 
-          bash ./verify-iso.sh "${images[0]}"
-          bash ./inspect-iso-boot-files.sh "${images[0]}"
+          ./verify-iso.sh "${images[0]}"
+          ./inspect-iso-boot-files.sh "${images[0]}"
 
           python3 ./iso-artifact-report.py \
             "${images[0]}" \
@@ -119,13 +119,13 @@ jobs:
           du -h release.iso
 
       - name: Validate QEMU BIOS and UEFI prerequisites
-        run: bash ./boot-test-preflight.sh release.iso
+        run: ./boot-test-preflight.sh release.iso
 
       - name: Test BIOS kernel boot
-        run: bash ./ci-qemu-boot.sh release.iso bios 120
+        run: ./ci-qemu-boot.sh release.iso bios 120
 
       - name: Test UEFI kernel boot
-        run: bash ./ci-qemu-boot.sh release.iso uefi 120
+        run: ./ci-qemu-boot.sh release.iso uefi 120
 
       - name: Upload boot evidence
         if: always()
