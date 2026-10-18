@@ -14,13 +14,23 @@ def run_checks(output):
     env={**os.environ,'JAVA_HOME':'/usr/lib/jvm/java-21-openjdk-amd64','ANDROID_HOME':'/opt/android-sdk','ANDROID_SDK_ROOT':'/opt/android-sdk'}
     with tempfile.TemporaryDirectory(prefix='developer-smoke-') as tmp:
         root=Path(tmp)
+        shutil.copytree('/etc/skel',root/'home')
+        env['HOME']=str(root/'home')
         (root/'hello.c').write_text('int main(void){return 0;}\n')
         (root/'Hello.java').write_text('public class Hello {public static void main(String[] a){System.out.println("JAVA_OK");}}\n')
         (root/'MainActivity.java').write_text('package dev.smoke; public class MainActivity extends android.app.Activity {}\n')
         (root/'AndroidManifest.xml').write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="dev.smoke"><application android:label="Smoke"><activity android:name=".MainActivity" android:exported="true"/></application></manifest>\n')
         (root/'dex').mkdir()
+        (root/'javascript').mkdir()
+        (root/'javascript/package.json').write_text('{"name":"rea-smoke","version":"1.0.0","main":"index.js"}')
+        (root/'javascript/index.js').write_text('module.exports.add = (a,b) => a+b;\n')
         checks=[
           ('codex',['codex','--version'],30),
+          ('rea',['rea','--version'],30),
+          ('rea-provider',['rea','doctor','--provider','ghidra','--json'],60),
+          ('rea-codex',['rea','doctor','--client','codex','--skill','--json'],60),
+          ('rea-mcp',['rea','mcp','doctor','--json'],120),
+          ('rea-javascript',['rea','analyze-javascript-application',str(root/'javascript'),'--json'],120),
           ('python',['python3','-c','import venv,tkinter; print("PYTHON_OK")'],20),
           ('node',['node','--version'],20),
           ('npm',['npm','--version'],20),
@@ -50,6 +60,8 @@ def run_checks(output):
           ('jadx',['jadx','--version'],60),
           ('jadx-decompile',['jadx','--no-res','-d',str(root/'decompiled'),str(root/'smoke.apk')],90),
           ('ghidra-analyze',['ghidra-headless',str(root),'Smoke','-import',str(root/'hello'),'-deleteProject'],180),
+          ('rea-native-function',['rea','function',str(root/'hello'),'main','--provider','ghidra','--json'],240),
+          ('rea-android',['rea','inspect-android-package',str(root/'smoke.apk'),'--json'],240),
           ('gdb',['gdb','--version'],20),
           ('wine',['wine','--version'],30)]
         for name,cmd,timeout in checks:
@@ -61,10 +73,16 @@ def run_checks(output):
                 if name=='windows-format': success=success and 'PE32+' in detail
                 if name=='java-run': success=success and 'JAVA_OK' in detail
                 if name=='jadx-decompile': success=success and any((root/'decompiled').rglob('MainActivity.java'))
-            except (OSError,subprocess.TimeoutExpired) as exc:
+                if name.startswith('rea-'):
+                    parsed=json.loads(result.stdout) if success else None
+                    success=success and isinstance(parsed,dict)
+                    if name=='rea-native-function': success=success and 'main' in result.stdout
+                    if name=='rea-android': success=success and 'dev.smoke' in result.stdout
+            except (OSError,subprocess.TimeoutExpired,json.JSONDecodeError) as exc:
                 success=False; detail=str(exc)
             results.append({'test':name,'passed':success,'seconds':round(time.monotonic()-start,2),'detail':detail})
             print(('PASS' if success else 'FAIL')+': '+name,flush=True)
+            if not success: print(detail[-6000:],flush=True)
     report={'all_passed':all(x['passed'] for x in results),'checks':results,'account_login_tested':False}
     if output:
         Path(output).parent.mkdir(parents=True,exist_ok=True)
