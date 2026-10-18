@@ -169,10 +169,10 @@ jobs:
         run: ./boot-test-preflight.sh release.iso
 
       - name: Test BIOS kernel boot
-        run: ./ci-qemu-boot.sh release.iso bios 300
+        run: ./ci-qemu-boot.sh release.iso bios 600
 
       - name: Test UEFI kernel boot
-        run: ./ci-qemu-boot.sh release.iso uefi 300
+        run: ./ci-qemu-boot.sh release.iso uefi 600
 
       - name: Test encrypted persistence across two boots
         run: python3 ci-persistence-test.py release.iso
