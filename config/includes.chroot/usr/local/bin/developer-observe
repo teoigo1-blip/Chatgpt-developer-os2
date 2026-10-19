@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Local screenshot capture through developer-agent; never transmits screenshots."""
+import argparse
+import subprocess
+
+parser = argparse.ArgumentParser(description='Capture a local screenshot')
+parser.add_argument('output', help='Local image file path')
+args = parser.parse_args()
+raise SystemExit(subprocess.run(['developer-agent', 'screenshot', args.output], check=False).returncode)
