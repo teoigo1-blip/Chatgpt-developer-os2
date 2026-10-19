@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""List installed development tools and their executable paths."""
+import argparse
+import shutil
+
+parser = argparse.ArgumentParser(description='Inspect available development tools')
+parser.add_argument('--check', action='store_true', help='Show available executables')
+args = parser.parse_args()
+if args.check:
+    for name in ('python3', 'git', 'java', 'node', 'npm', 'cmake', 'ninja'):
+        print(f'{name}: {shutil.which(name) or "not installed"}')
+else:
+    parser.print_help()
