@@ -11,7 +11,7 @@ def main():
     data = json.loads(args.file.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or not isinstance(data.get("steps"), list):
         parser.error("Plan must contain a steps list")
-    allowed = {"note", "inspect", "review"}
+    allowed = {"note", "inspect", "review", "open", "screenshot"}
     for index, step in enumerate(data["steps"], 1):
         if not isinstance(step, dict) or step.get("action") not in allowed:
             parser.error(f"Step {index}: unsupported or unsafe action")
