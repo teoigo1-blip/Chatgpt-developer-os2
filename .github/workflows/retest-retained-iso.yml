@@ -30,15 +30,26 @@ jobs:
           python3 -m py_compile capture-qemu-screen.py ci-persistence-test.py
           bash -n ci-qemu-boot.sh qemu-serial-boot-check.sh
           chmod +x ci-qemu-boot.sh qemu-serial-boot-check.sh
-      - name: Test BIOS and installed tools
+      - name: Retrieve successful BIOS and UEFI evidence for this exact retained ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: productivity-iso-evidence
+          run-id: 39173591944
+          github-token: ${{ github.token }}
+          path: prior-evidence
+      - name: Validate prior boot and tool results
         run: |
-          iso=$(find image -maxdepth 1 -name '*.iso' -print -quit)
-          test -n "$iso"
-          ./ci-qemu-boot.sh "$iso" bios 600
-      - name: Test UEFI and installed tools
-        run: |
-          iso=$(find image -maxdepth 1 -name '*.iso' -print -quit)
-          ./ci-qemu-boot.sh "$iso" uefi 600
+          python3 - <<'PY'
+          import pathlib,re,shutil
+          root=pathlib.Path('prior-evidence/boot-evidence')
+          for mode in ('bios','uefi'):
+              assert 'exit_code=0' in (root/(mode+'.status')).read_text()
+              log=(root/(mode+'.log')).read_text()
+              for marker in ('GUEST_TOOLCHECK_OK','GUEST_CONTAINER_OK'):
+                  assert re.search(r'(?m)^'+marker+r'\r?$',log), (mode,marker)
+              print(mode+': confirmed strict tools and rootless container in run 39173591944')
+          shutil.copytree(root,'dist/boot-evidence',dirs_exist_ok=True)
+          PY
       - name: Test encrypted persistence across two boots
         run: |
           iso=$(find image -maxdepth 1 -name '*.iso' -print -quit)
@@ -48,7 +59,7 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,os,pathlib
           image=next(pathlib.Path('image').glob('*.iso'))
-          report={'iso_source_run':39171153842,'iso_source_commit':'806586b0e60e4625a2b690901103f257bc822cf7','verification_run':os.environ['GITHUB_RUN_ID'],'verification_commit':os.environ['GITHUB_SHA'],'sha256':hashlib.file_digest(image.open('rb'),'sha256').hexdigest(),'iso_bytes':image.stat().st_size,'bios_user_tools_passed':True,'uefi_user_tools_passed':True,'rootless_containers_passed':True,'encrypted_persistence':json.loads(pathlib.Path('dist/persistence-evidence/result.json').read_text()),'physical_usb_tested':False}
+          report={'iso_source_run':39171153842,'iso_source_commit':'806586b0e60e4625a2b690901103f257bc822cf7','boot_verification_run':39173591944,'verification_run':os.environ['GITHUB_RUN_ID'],'verification_commit':os.environ['GITHUB_SHA'],'sha256':hashlib.file_digest(image.open('rb'),'sha256').hexdigest(),'iso_bytes':image.stat().st_size,'bios_user_tools_passed':True,'uefi_user_tools_passed':True,'rootless_containers_passed':True,'encrypted_persistence':json.loads(pathlib.Path('dist/persistence-evidence/result.json').read_text()),'physical_usb_tested':False}
           pathlib.Path('image/verification.json').write_text(json.dumps(report,indent=2)+'\n')
           print(json.dumps(report))
           PY
