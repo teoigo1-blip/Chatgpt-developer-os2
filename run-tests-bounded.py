@@ -22,7 +22,7 @@ for test in sorted((root / 'tests').glob('test_*.py')):
         output = result.stdout + result.stderr
         # Older tests contain top-level assertions but no unittest.TestCase.
         # Execute those files directly instead of incorrectly reporting zero tests.
-        if result.returncode != 0 and 'Ran 0 tests' in output and 'NO TESTS RAN' in output:
+        if 'Ran 0 tests' in output and 'NO TESTS RAN' in output:
             remaining = max(1, args.timeout - (time.monotonic() - started))
             direct = subprocess.run(
                 [sys.executable, str(test)], cwd=root,
