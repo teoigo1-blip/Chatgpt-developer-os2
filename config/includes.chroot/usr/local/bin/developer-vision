@@ -1,0 +1,5 @@
+#!/usr/bin/env python3
+"""Legacy visual automation entrypoint: deshabilitado."""
+import sys
+print('Automatización visual deshabilitado: no se ofrece control remoto de escritorio.')
+sys.exit(2)
