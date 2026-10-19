@@ -6,8 +6,8 @@ class TestV26(unittest.TestCase):
    self.assertEqual(subprocess.run(['bash','-n',str(ROOT/file)]).returncode,0)
  def test_workflow_runs_real_boot(self):
   s=(ROOT/'.github/workflows/build-live-iso.yml').read_text()
-  self.assertIn('qemu-serial-boot-check.sh release.iso bios',s)
-  self.assertIn('qemu-serial-boot-check.sh release.iso uefi',s)
+  self.assertIn('ci-qemu-boot.sh release.iso bios',s)
+  self.assertIn('ci-qemu-boot.sh release.iso uefi',s)
  def test_serial_console_configured(self):
   self.assertIn('console=ttyS0,115200n8',(ROOT/'build.sh').read_text())
  def test_no_usb_write(self):
