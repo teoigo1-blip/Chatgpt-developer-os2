@@ -25,7 +25,7 @@ for test in sorted((root / 'tests').glob('test_*.py')):
         if 'Ran 0 tests' in output:
             remaining = max(1, args.timeout - (time.monotonic() - started))
             direct = subprocess.run(
-                [sys.executable, str(test)], cwd=root,
+                [sys.executable, "-c", "import runpy,sys; ns=runpy.run_path(sys.argv[1]); [(v()) for k,v in ns.items() if k.startswith(\'test_\') and callable(v)]", str(test)], cwd=root,
                 capture_output=True, text=True, timeout=remaining)
             output += '\nDirect script execution:\n' + direct.stdout + direct.stderr
             result = direct
