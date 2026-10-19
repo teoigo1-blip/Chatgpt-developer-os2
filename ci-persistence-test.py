@@ -12,6 +12,15 @@ def main():
         helper=root/'config/includes.chroot/usr/local/bin/developer-usb-persistence'
         subprocess.run(['sudo','python3',str(helper),'--test-image',str(image)],check=True)
         subprocess.run(['sudo','chown',str(os.getuid())+':'+str(os.getgid()),str(image)],check=True)
+        # The helper's 512 MiB crypto fixture is too small for a complete Live
+        # home with editor extensions. Grow only this newly-created test file.
+        with image.open('r+b') as file:file.truncate(4*1024**3)
+        keyfile=tmp/'public-test-key';keyfile.write_text(key);keyfile.chmod(0o600)
+        mapping='devos-ci-'+str(os.getpid())
+        subprocess.run(['sudo','cryptsetup','open','--key-file',str(keyfile),str(image),mapping],check=True)
+        try:subprocess.run(['sudo','resize2fs','/dev/mapper/'+mapping],check=True)
+        finally:subprocess.run(['sudo','cryptsetup','close',mapping],check=True)
+        print('Disposable encrypted Live test volume: 4 GiB',flush=True)
         for name in ('vmlinuz','initrd.img'):
             subprocess.run(['xorriso','-osirrox','on','-indev',str(iso),'-extract','/live/'+name,str(tmp/name)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         for phase in ('write','read'):
@@ -26,10 +35,12 @@ def main():
                     if events:
                         chunk=os.read(process.stdout.fileno(),65536).decode(errors='replace');transcript+=chunk
                         tail=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',transcript[-1800:]).replace('\r','')
-                        if not unlocked and re.search(r'(?i)(passphrase|unlock.*disk|contraseña.*disco|frase.*contraseña)',tail):send(key);unlocked=True
-                        if not user and re.search(r'(?im)^.*login:\s*$',tail):send('user');user=True
-                        elif user and not password and re.search(r'(?im)^(password|contraseña|contrasena):\s*$',tail):send('live');password=True;password_time=time.monotonic()
-                    if password and not sent and time.monotonic()-password_time>8:
+                        if not unlocked and re.search(r'(?i)(passphrase|unlock.*disk|contraseña.*disco|frase.*contraseña)',tail):send(key);unlocked=True;print(phase+': unlock prompt answered',flush=True)
+                        if not user and re.search(r'(?im)^.*login:\s*$',tail):send('user');user=True;print(phase+': login prompt answered',flush=True)
+                        elif user and not password and re.search(r'(?im)^(password|contraseña|contrasena):\s*$',tail):
+                            time.sleep(1);send('live');password=True;password_time=time.monotonic();print(phase+': password prompt answered',flush=True)
+                        if password and re.search(r'(?i)login incorrect',tail):raise RuntimeError('Live user login failed; inspect persisted live-config diagnostics')
+                    if password and not sent and re.search(r'user@[^\n]*[#$] ?$',tail):
                         if phase=='write':body="mkdir -p ~/Projects; printf '%s\\n' '"+token+"' > ~/Projects/.persistence-proof; sync"
                         else:body="test \"$(cat ~/Projects/.persistence-proof)\" = '"+token+"'"
                         marker='PERSIST_'+phase.upper()+'_OK'
