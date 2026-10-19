@@ -19,3 +19,5 @@ adb
 fastboot
 gh
 ffmpeg
+sudo
+policykit-1
