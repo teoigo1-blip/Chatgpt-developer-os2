@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Open websites in the user's browser. No credentials or root privileges."""
+import argparse
+import subprocess
+import shutil
+from urllib.parse import urlparse
+
+def main():
+    parser = argparse.ArgumentParser(description="Open an HTTPS website with the user session")
+    parser.add_argument("url")
+    args = parser.parse_args()
+    parsed = urlparse(args.url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        parser.error("Only HTTPS URLs without embedded credentials are allowed")
+    opener = shutil.which("xdg-open")
+    if not opener:
+        parser.error("xdg-open is not installed")
+    return subprocess.run([opener, args.url], check=False).returncode
+
+if __name__ == "__main__":
+    raise SystemExit(main())
