@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Local GUI for explicitly supervised Codex actions."""
+import subprocess
+import sys
+import tkinter as tk
+from tkinter import messagebox
+
+def launch(command):
+    try:
+        subprocess.Popen(command, start_new_session=True)
+    except OSError as error:
+        messagebox.showerror("Developer Panel", str(error))
+
+def codex_login():
+    if messagebox.askyesno("Codex", "¿Abrir el inicio de sesión oficial de Codex?"):
+        launch(["xfce4-terminal", "--command", "developer-codex login"])
+
+def codex_task():
+    if messagebox.askyesno("Codex", "¿Abrir Codex en una terminal para supervisar la tarea?"):
+        launch(["xfce4-terminal", "--command", "developer-codex --help"])
+
+def screenshot():
+    if messagebox.askyesno("Capturar pantalla", "¿Capturar pantalla en Imágenes?"):
+        from pathlib import Path
+        folder = Path.home() / "Pictures"
+        folder.mkdir(parents=True, exist_ok=True)
+        launch(["developer-agent", "screenshot", str(folder / "developer-screen.png")])
+
+def main():
+    root = tk.Tk()
+    root.title("ChatGPT Developer OS")
+    root.geometry("460x300")
+    tk.Button(root, text="Abrir ChatGPT", command=lambda: launch(["developer-chatgpt"])).pack(fill="x", padx=16, pady=8)
+    tk.Button(root, text="Iniciar sesión en Codex", command=codex_login).pack(fill="x", padx=16, pady=8)
+    tk.Button(root, text="Tarea Codex supervisada", command=codex_task).pack(fill="x", padx=16, pady=8)
+    tk.Button(root, text="Capturar pantalla", command=screenshot).pack(fill="x", padx=16, pady=8)
+    tk.Label(root, text="Las tareas que modifican archivos requieren '--confirm'").pack(pady=8)
+    root.mainloop()
+
+if __name__ == "__main__":
+    sys.exit(main())
