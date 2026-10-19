@@ -13,7 +13,9 @@ trap 'rm -rf -- "$work"' EXIT
 cp -a -- "$source_dir/config" "$source_dir/build.sh" "$work/"
 cd "$work"
 if ! ./build.sh 2>&1 | tee "$output_dir/build.log"; then
-  echo "ERROR: ISO build failed. See $output_dir/build.log" >&2
+  echo "ERROR: ISO build failed. Last 100 log lines:" >&2
+  tail -n 100 "$output_dir/build.log" >&2 || true
+  echo "Full log: $output_dir/build.log" >&2
   exit 1
 fi
 mapfile -d '' images < <(find "$work" -maxdepth 1 -type f -name '*.iso' -print0)
