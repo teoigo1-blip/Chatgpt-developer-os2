@@ -1,0 +1,5 @@
+# Firmware for hardware boot compatibility (Debian 13 non-free-firmware)
+firmware-iwlwifi
+firmware-realtek
+firmware-amd-graphics
+firmware-misc-nonfree
