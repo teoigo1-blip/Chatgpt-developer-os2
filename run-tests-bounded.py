@@ -37,6 +37,8 @@ for test in sorted((root / 'tests').glob('test_*.py')):
     results.append({'file': test.name, 'status': status,
                     'seconds': round(time.monotonic() - started, 2), 'detail': detail})
     print(f'{test.name}: {status}', flush=True)
+    if status != 'pass':
+        print(detail, flush=True)
 summary = {s: sum(r['status'] == s for r in results) for s in ('pass', 'fail', 'timeout')}
 path = root / args.output
 path.write_text(json.dumps({'summary': summary, 'results': results}, indent=2) + '\n')
