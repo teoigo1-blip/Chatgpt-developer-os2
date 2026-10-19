@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+# Do not create Python bytecode in live-build configuration during tests.
+export PYTHONDONTWRITEBYTECODE=1
 echo 'Checking source integrity, configuration and test suite...'
 python3 ./validate-workflow.py
 python3 ./check-build-inputs.py
