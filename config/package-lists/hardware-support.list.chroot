@@ -1,7 +1,4 @@
 linux-image-amd64
-firmware-iwlwifi
-firmware-realtek
-firmware-misc-nonfree
 network-manager
 rfkill
 pciutils
