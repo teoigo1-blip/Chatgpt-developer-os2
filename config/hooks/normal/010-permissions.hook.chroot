@@ -1,3 +1,6 @@
 #!/bin/sh
 set -eu
-chmod 755 /usr/local/bin/developer-doctor /usr/local/bin/developer-tools /usr/local/bin/developer-agent /usr/local/bin/developer-codex /usr/local/bin/developer-plan /usr/local/bin/developer-panel
+for script in /usr/local/bin/developer-*; do
+    [ -f "$script" ] || continue
+    chmod 755 "$script"
+done
