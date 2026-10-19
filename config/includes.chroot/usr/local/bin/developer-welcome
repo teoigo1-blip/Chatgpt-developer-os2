@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+printf '%s\n' 'ChatGPT Developer OS' 'Abre ChatGPT desde el menú o con developer-chatgpt.' 'Para codex, ejecuta developer-codex login.' 'Comprueba herramientas con developer-doctor.'
