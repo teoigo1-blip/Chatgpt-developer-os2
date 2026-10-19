@@ -28,6 +28,36 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      - name: Restore missing v4.2 source files from bundled archive
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          import zipfile
+          root = Path.cwd().resolve()
+          archive = root / 'ChatGPTDeveloperOS_v4.2_LiveUSB_SOURCE.zip'
+          restored = []
+          with zipfile.ZipFile(archive) as z:
+              for line in (root / 'SOURCE_SHA256SUMS').read_text().splitlines():
+                  expected, relative = line.split('  ', 1)
+                  path = (root / relative).resolve()
+                  if not path.is_relative_to(root):
+                      raise SystemExit('Invalid source path')
+                  if path.is_file():
+                      continue
+                  matches = [n for n in z.namelist() if n.endswith('/' + relative) or n == relative]
+                  if len(matches) != 1:
+                      raise SystemExit('Missing or ambiguous archive entry: ' + relative)
+                  data = z.read(matches[0])
+                  if hashlib.sha256(data).hexdigest() != expected:
+                      raise SystemExit('Original checksum mismatch: ' + relative)
+                  path.parent.mkdir(parents=True, exist_ok=True)
+                  path.write_bytes(data)
+                  restored.append(relative)
+          print('Restored original source files:', *restored, sep='\n')
+          PY
+          find config/hooks config/includes.chroot/usr/local/bin -type f -exec chmod 755 {} +
+
       - name: Enable script execution
         run: |
           find . -maxdepth 1 -type f \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} +
@@ -51,6 +81,7 @@ jobs:
             dosfstools \
             qemu-system-x86 \
             ovmf \
+            cryptsetup-bin \
             file
 
       - name: Check build host and free space
@@ -86,7 +117,23 @@ jobs:
           fi
 
       - name: Build Debian Live image
-        run: sudo ./ci-build-iso.sh "$PWD/dist"
+        run: |
+          docker run --rm --privileged \
+            -v "$PWD:/workspace" -w /workspace \
+            debian:trixie bash -lc '
+              set -Eeuo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y live-build debootstrap debian-archive-keyring xorriso squashfs-tools syslinux-common isolinux grub-pc-bin grub-efi-amd64-bin mtools dosfstools file sudo ca-certificates
+              sudo ./ci-build-iso.sh "$PWD/dist"
+            '
+
+      - name: Restore artifact ownership for verification and diagnostics
+        if: always()
+        run: |
+          if [ -d dist ]; then
+            sudo chown -R "$(id -u):$(id -g)" dist
+          fi
 
       - name: Locate and verify artifact
         shell: bash
@@ -122,10 +169,21 @@ jobs:
         run: ./boot-test-preflight.sh release.iso
 
       - name: Test BIOS kernel boot
-        run: ./ci-qemu-boot.sh release.iso bios 120
+        run: ./ci-qemu-boot.sh release.iso bios 600
 
       - name: Test UEFI kernel boot
-        run: ./ci-qemu-boot.sh release.iso uefi 120
+        run: ./ci-qemu-boot.sh release.iso uefi 600
+
+      - name: Test encrypted persistence across two boots
+        run: python3 ci-persistence-test.py release.iso
+
+      - name: Upload persistence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: persistence-evidence
+          path: dist/persistence-evidence/
+          if-no-files-found: ignore
 
       - name: Upload boot evidence
         if: always()
@@ -173,6 +231,19 @@ jobs:
             dist/build.log
             dist/build-diagnosis.json
             .build/logs/
+          if-no-files-found: ignore
+
+      - name: Preserve unverified ISO on validation failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatgpt-developer-os-iso-unverified
+          path: |
+            dist/*.iso
+            dist/SHA256SUMS
+            dist/*.boot-report.txt
+          compression-level: 0
+          retention-days: 7
           if-no-files-found: ignore
 
       - name: Upload ISO and integrity report

@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Prepare one explicitly selected USB partition, or a NEW disposable test image."""
+import argparse,json,os,stat,subprocess,tempfile,uuid
+from pathlib import Path
+
+def run(cmd,**kw):return subprocess.run(cmd,check=True,**kw)
+def inventory():
+    data=json.loads(subprocess.check_output(['lsblk','--json','--bytes','--output','PATH,TYPE,TRAN,RM,SIZE,FSTYPE,MOUNTPOINTS'],text=True))
+    safe=[]
+    for disk in data['blockdevices']:
+        if not (disk.get('tran')=='usb' or disk.get('rm')):continue
+        # Only leaf partitions, never an entire disk or the live boot volume.
+        for part in disk.get('children',[]):
+            if part['type']=='part' and not part.get('children') and not any(part.get('mountpoints') or []):safe.append(part)
+    return safe
+def create(target,keyfile=None):
+    name='devos-'+uuid.uuid4().hex[:10];opened=False;mounted=False
+    with tempfile.TemporaryDirectory(prefix='developer-persistence-') as tmp:
+        mount=Path(tmp)/'mount';mount.mkdir()
+        try:
+            cmd=['cryptsetup','luksFormat','--type','luks2']
+            if keyfile:cmd+=['--batch-mode','--pbkdf','pbkdf2','--iter-time','10','--key-file',str(keyfile)]
+            else:cmd+=['--verify-passphrase']
+            run([*cmd,str(target)])
+            cmd=['cryptsetup','open']
+            if keyfile:cmd+=['--key-file',str(keyfile)]
+            run([*cmd,str(target),name]);opened=True
+            run(['mkfs.ext4','-L','persistence','/dev/mapper/'+name])
+            run(['mount','/dev/mapper/'+name,str(mount)]);mounted=True
+            (mount/'persistence.conf').write_text('/ union\n')
+            (mount/'developer-persistence-test').write_text('Encrypted persistence initialized\n')
+            run(['sync']);run(['umount',str(mount)]);mounted=False
+        finally:
+            if mounted:subprocess.run(['umount',str(mount)],check=False)
+            if opened:subprocess.run(['cryptsetup','close',name],check=False)
+
+def main():
+    p=argparse.ArgumentParser(description='Preparar persistencia cifrada en una partición USB seleccionada')
+    p.add_argument('--test-image',type=Path,help='Prueba: crear exclusivamente un archivo nuevo de 512 MiB')
+    a=p.parse_args()
+    if os.geteuid()!=0:raise SystemExit('Abre esta herramienta con sudo desde el panel.')
+    if a.test_image:
+        target=a.test_image.resolve()
+        if target.suffix!='.img':p.error('El archivo de prueba debe terminar en .img')
+        # Exclusive creation prevents overwriting any existing file or device.
+        with target.open('xb') as f:f.truncate(512*1024*1024)
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/'key';key.write_text('developer-os-disposable-test-only');key.chmod(0o600)
+            create(target,key)
+            name='devos-check-'+uuid.uuid4().hex[:8]
+            run(['cryptsetup','open','--key-file',str(key),str(target),name])
+            try:
+                label=subprocess.check_output(['blkid','-s','LABEL','-o','value','/dev/mapper/'+name],text=True).strip()
+                assert label=='persistence'
+                mount=Path(tmp)/'verify';mount.mkdir();run(['mount','-o','ro','/dev/mapper/'+name,str(mount)])
+                try:assert (mount/'persistence.conf').read_text()=='/ union\n'
+                finally:run(['umount',str(mount)])
+            finally:run(['cryptsetup','close',name])
+        print('PERSISTENCE_CRYPTO_OK');return
+    safe=inventory()
+    if not safe:raise SystemExit('No hay particiones USB libres y desmontadas. Usa Discos para preparar una partición aparte; conserva la partición de arranque.')
+    print('Se borrará únicamente la partición que selecciones. Guarda antes sus datos.')
+    for i,x in enumerate(safe,1):print(f"{i}. {x['path']} — {x['size']//1024**3} GiB — {x.get('fstype') or 'sin formato'}")
+    try:
+        number=int(input('Número de partición (0 cancela): '))
+        if number<1 or number>len(safe):raise ValueError()
+        item=safe[number-1]
+    except (ValueError,IndexError):raise SystemExit('Cancelado.')
+    path=item['path']
+    if input('Para autorizar el BORRADO escribe la ruta completa '+path+': ').strip()!=path:raise SystemExit('Cancelado.')
+    if path not in [x['path'] for x in inventory()]:raise SystemExit('El dispositivo cambió o está montado. Operación cancelada.')
+    if not stat.S_ISBLK(Path(path).stat().st_mode):raise SystemExit('No es una partición de bloques.')
+    create(Path(path));print('Listo. Al reiniciar con este USB se pedirá la contraseña. Comprueba que un archivo de prueba sobreviva al reinicio.')
+if __name__=='__main__':main()

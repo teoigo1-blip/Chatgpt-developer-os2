@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""Encrypted backups; never store a password or overwrite a restored project."""
+import argparse,getpass,json,os,subprocess,sys,time
+from pathlib import Path
+
+def main():
+    p=argparse.ArgumentParser(description='Copias cifradas de proyectos y configuración')
+    p.add_argument('action',choices=('init','create','list','check','restore'))
+    p.add_argument('--repo',type=Path);p.add_argument('--destination',type=Path)
+    a=p.parse_args();home=Path.home();settings=home/'.local/state/developer-os/backup.json'
+    repo=a.repo
+    if repo is None and settings.is_file():repo=Path(json.loads(settings.read_text())['repository'])
+    if repo is None:
+        choice=input('Carpeta para las copias (disco externo recomendado): ').strip()
+        if not choice:raise SystemExit('Cancelado.')
+        repo=Path(choice).expanduser()
+    repo=repo.expanduser().resolve();projects=home/'Projects'
+    if repo==home or repo.is_relative_to(projects.resolve()):p.error('El destino debe estar fuera de Projects y no puede ser tu carpeta personal.')
+    password=getpass.getpass('Contraseña del archivo de copias: ')
+    if not password:raise SystemExit('La contraseña no puede estar vacía.')
+    if a.action=='init' and password!=getpass.getpass('Repite la contraseña: '):raise SystemExit('Las contraseñas no coinciden.')
+    env={**os.environ,'RESTIC_PASSWORD':password};cmd=['restic','--repo',str(repo)]
+    if a.action=='init':cmd+=['init']
+    elif a.action=='create':
+        sources=[projects,home/'.codex/config.toml',home/'.config/Code/User',home/'.vscode/argv.json']
+        sources=[str(x) for x in sources if x.exists()]
+        if not sources:raise SystemExit('No hay proyectos ni ajustes para copiar.')
+        cmd+=['backup','--tag','developer-os',*sources]
+    elif a.action=='list':cmd+=['snapshots']
+    elif a.action=='check':cmd+=['check','--read-data']
+    else:
+        dest=(a.destination or home/'Recuperados'/time.strftime('copia-%Y%m%d-%H%M%S')).expanduser().resolve()
+        if dest.exists():raise SystemExit('La carpeta de recuperación ya existe. Elige una carpeta nueva.')
+        dest.mkdir(parents=True);cmd+=['restore','latest','--tag','developer-os','--target',str(dest)]
+        print('Se recuperará en:',dest,flush=True)
+    result=subprocess.run(cmd,env=env,check=False)
+    if result.returncode==0 and a.action=='init':
+        settings.parent.mkdir(parents=True,exist_ok=True);settings.write_text(json.dumps({'repository':str(repo)})+'\n')
+    return result.returncode
+if __name__=='__main__':sys.exit(main())

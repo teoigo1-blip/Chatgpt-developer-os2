@@ -1,0 +1,18 @@
+# Productivity, recovery and rootless containers
+locales-all
+sudo
+shellcheck
+ccache
+restic
+cryptsetup
+cryptsetup-initramfs
+podman
+uidmap
+slirp4netns
+fuse-overlayfs
+dbus-user-session
+busybox-static
+gnome-disk-utility
+jq
+sqlite3
+xvfb

@@ -6,3 +6,4 @@ Exec=xfce4-terminal --title="ChatGPT Developer OS" --hold --command=/usr/local/b
 OnlyShowIn=XFCE;
 X-GNOME-Autostart-enabled=true
 Terminal=false
+Hidden=true

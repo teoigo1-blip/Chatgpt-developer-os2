@@ -1,5 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Developer Panel (manual)
-Exec=/usr/local/bin/developer-panel
-Hidden=true
+Name=Panel de Developer OS
+Exec=/usr/local/bin/developer-dashboard
+Terminal=false
+OnlyShowIn=XFCE;
+X-GNOME-Autostart-enabled=true

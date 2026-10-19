@@ -4,7 +4,9 @@ class V33(unittest.TestCase):
  def test_preflight_syntax(self):
   subprocess.run(['bash','-n',str(ROOT/'github-preflight.sh')],check=True)
  def test_workflow_timeout(self):
-  self.assertIn("timeout 180s python3 -m unittest",(ROOT/'.github/workflows/build-live-iso.yml').read_text())
+  self.assertIn('./prebuild-gate.sh',(ROOT/'.github/workflows/build-live-iso.yml').read_text())
+  self.assertIn('run-tests-bounded.py --timeout 12',(ROOT/'prebuild-gate.sh').read_text())
+  self.assertIn('timeout=args.timeout',(ROOT/'run-tests-bounded.py').read_text())
  def test_workflow_reports(self):
   self.assertIn('test -s iso-artifact.json',(ROOT/'.github/workflows/build-live-iso.yml').read_text())
  def test_android_guide(self):

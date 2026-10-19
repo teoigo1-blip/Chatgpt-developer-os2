@@ -1,0 +1,91 @@
+#!/bin/bash
+set -Eeuo pipefail
+export DEBIAN_FRONTEND=noninteractive
+. /etc/profile.d/developer-toolchain.sh
+developer-assets
+mkdir -p /etc/cryptsetup-initramfs
+printf '%s\n' 'CRYPTSETUP=y' > /etc/cryptsetup-initramfs/conf-hook
+python3 - <<'PY'
+import hashlib,json,pathlib,subprocess,tarfile,tempfile,urllib.request
+lock=pathlib.Path('/usr/local/share/developer-os/productivity-lock.json')
+meta=json.load(urllib.request.urlopen('https://update.code.visualstudio.com/api/update/linux-deb-x64/stable/latest',timeout=60))
+digest=meta['sha256hash'];assert len(digest)==64
+with tempfile.TemporaryDirectory() as tmp:
+    package=pathlib.Path(tmp)/'code.deb'
+    subprocess.run(['curl','-fL','--retry','4','--max-time','900',meta['url'],'-o',str(package)],check=True)
+    with package.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()==digest
+    subprocess.run(['apt-get','install','-y',str(package)],check=True)
+    archive=pathlib.Path(tmp)/'scrcpy.tar.gz'
+    url='https://github.com/Genymobile/scrcpy/releases/download/v5.0.1/scrcpy-linux-x86_64-v5.0.1.tar.gz'
+    subprocess.run(['curl','-fL','--retry','4','--max-time','900',url,'-o',str(archive)],check=True)
+    with archive.open('rb') as f:assert hashlib.file_digest(f,'sha256').hexdigest()=='9f969d30cc574816077edecda65719c1c70b0aee1df1ba5fa00779ac07b8fd6e'
+    with tarfile.open(archive) as t:t.extractall('/opt/developer-os',filter='data')
+lock.write_text(json.dumps({'vscode':{'version':meta['productVersion'],'sha256':digest,'url':meta['url']},'scrcpy':{'version':'5.0.1','sha256':'9f969d30cc574816077edecda65719c1c70b0aee1df1ba5fa00779ac07b8fd6e'}},indent=2)+'\n')
+PY
+scrcpy_dir=$(find /opt/developer-os -maxdepth 1 -type d -name 'scrcpy-linux-x86_64*' -print -quit)
+test -n "$scrcpy_dir"
+ln -sfn "$scrcpy_dir/scrcpy" /usr/local/bin/scrcpy
+python3 -m venv /opt/developer-os/python-tools
+/opt/developer-os/python-tools/bin/pip install --no-cache-dir uv ruff pytest playwright
+/opt/developer-os/python-tools/bin/pip freeze > /usr/local/share/developer-os/python-tools-lock.txt
+for tool in uv uvx ruff pytest playwright; do ln -sfn "/opt/developer-os/python-tools/bin/$tool" "/usr/local/bin/$tool"; done
+export PLAYWRIGHT_BROWSERS_PATH=/opt/developer-os/playwright-browsers
+/opt/developer-os/python-tools/bin/python -m playwright install --with-deps --only-shell chromium
+chmod -R a+rX /opt/developer-os/playwright-browsers
+playwright_mcp_version=$(npm view @playwright/mcp version)
+npm install --global --prefix /usr/local --no-audit --no-fund "@playwright/mcp@$playwright_mcp_version"
+printf '%s\n' "$playwright_mcp_version" > /usr/local/share/developer-os/playwright-mcp-version.txt
+cat >> /etc/profile.d/developer-toolchain.sh <<'ENV'
+export PLAYWRIGHT_BROWSERS_PATH=/opt/developer-os/playwright-browsers
+export CCACHE_MAXSIZE=1G
+export PATH="/usr/lib/ccache:/usr/sbin:/sbin:$PATH"
+ENV
+cat >> /etc/skel/.codex/config.toml <<'CONFIG'
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+
+[mcp_servers.playwright]
+command = "/usr/local/bin/playwright-mcp"
+args = ["--headless", "--browser", "chromium", "--executable-path", "/usr/bin/chromium"]
+CONFIG
+mkdir -p /etc/skel/.vscode/extensions /etc/skel/.config/Code/User /etc/skel/Projects
+chown nobody:nogroup /etc/skel/.vscode/extensions
+editor_home=$(mktemp -d)
+chown nobody:nogroup "$editor_home"
+for extension in openai.chatgpt MS-CEINTL.vscode-language-pack-es; do
+  runuser -u nobody -- env HOME="$editor_home" code --user-data-dir "$editor_home/data" --extensions-dir /etc/skel/.vscode/extensions --install-extension "$extension" --force
+done
+chown -R root:root /etc/skel/.vscode
+printf '%s\n' '{"locale":"es"}' > /etc/skel/.vscode/argv.json
+printf '%s\n' '{"chatgpt.localeOverride":"es","files.autoSave":"off"}' > /etc/skel/.config/Code/User/settings.json
+cp /usr/local/share/developer-os/examples/AGENTS.md /etc/skel/Projects/AGENTS.md
+cp -a /usr/local/share/developer-os/examples /etc/skel/Projects/Ejemplos
+chmod +x /usr/local/share/developer-os/examples/android-demo/build.sh /etc/skel/Projects/Ejemplos/android-demo/build.sh
+printf '%s\n' 'user:100000:65536' > /etc/subuid
+printf '%s\n' 'user:100000:65536' > /etc/subgid
+# A tiny offline image for the rootless container test; no registry account or network.
+python3 - <<'PY'
+import io,tarfile
+with tarfile.open('/usr/local/share/developer-os/busybox-rootfs.tar','w') as t:
+    t.add('/usr/bin/busybox',arcname='bin/busybox')
+    link=tarfile.TarInfo('bin/sh');link.type=tarfile.SYMTYPE;link.linkname='busybox';t.addfile(link)
+PY
+cat > /usr/share/applications/developer-dashboard.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=Panel de Developer OS
+Exec=developer-dashboard
+Icon=applications-development
+Terminal=false
+Categories=Development;
+DESKTOP
+chmod 755 /usr/local/bin/developer-*
+. /etc/profile.d/developer-toolchain.sh
+HOME=/etc/skel developer-doctor --strict
+developer-smoke-test --output /usr/local/share/developer-os/toolchain-smoke.json
+developer-enhancement-test --output /usr/local/share/developer-os/enhancement-smoke.json
+code --no-sandbox --user-data-dir "$editor_home/root-version" --version
+scrcpy --version
+update-initramfs -u -k all
+npm cache clean --force

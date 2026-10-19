@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-import shutil
-import os
-
-items = {'Codex CLI':'codex', 'Android Studio':'studio', 'Java':'java', 'Gradle':'gradle', 'ADB':'adb', 'CMake':'cmake', 'MinGW-w64':'x86_64-w64-mingw32-gcc', 'Wine':'wine', 'Ghidra':'ghidraRun', 'JADX':'jadx', 'Apktool':'apktool', 'REA':'rea'}
-for name, command in items.items():
-    found = shutil.which(command)
-    if name == 'Android Studio' and not found:
-        for path in ('/opt/android-studio/bin/studio.sh', '/opt/android-studio/bin/studio'):
-            if os.path.exists(path): found = path; break
-    print(f'{name}: {found or "NO INSTALADO"}')
-print('ANDROID_HOME:', os.environ.get('ANDROID_HOME', 'SIN CONFIGURAR'))
+import subprocess,sys
+from pathlib import Path
+print('Codex CLI, REA, Android SDK y herramientas de desarrollo:',flush=True)
+raise SystemExit(subprocess.run([sys.executable,str(Path(__file__).with_name('developer-doctor')),*sys.argv[1:]],check=False).returncode)

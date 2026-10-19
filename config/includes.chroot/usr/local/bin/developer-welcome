@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Only run within an interactive X11 user session; never run Codex without user action.
+if [[ -z "${DISPLAY:-}" ]]; then echo 'Se necesita una sesión gráfica X11.' >&2; exit 1; fi
+printf '%s\n' 'ChatGPT Developer OS - Herramientas preparadas' '1. developer-doctor: comprobar herramientas y Android SDK' '2. developer-smoke-test: probar compilación y análisis' '3. developer-codex login: iniciar sesión oficial en Codex' '4. developer-panel: abrir panel de desarrollo' '' 'No se ejecutarán tareas de Codex automáticamente.'
+if command -v developer-doctor >/dev/null 2>&1; then developer-doctor || true; fi
+printf '\nREA está registrado en Codex con Ghidra. Puedes usar rea --help o rea doctor --provider ghidra --json.\n'
+printf '\nPulsa Intro para cerrar...'; read -r _ || true

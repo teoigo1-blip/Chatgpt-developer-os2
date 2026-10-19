@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Test the actual Playwright MCP server against a local, disposable web page."""
+import functools,http.server,json,os,selectors,subprocess,threading,time
+
+handler=functools.partial(http.server.SimpleHTTPRequestHandler,directory='/usr/local/share/developer-os/examples/web-demo')
+server=http.server.ThreadingHTTPServer(('127.0.0.1',0),handler)
+threading.Thread(target=server.serve_forever,daemon=True).start()
+args=['playwright-mcp','--headless','--browser','chromium','--executable-path','/usr/bin/chromium']
+if os.geteuid()==0:args+=['--no-sandbox']
+process=subprocess.Popen(args,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,bufsize=0)
+selector=selectors.DefaultSelector();selector.register(process.stdout,selectors.EVENT_READ)
+buffer=b''
+def send(value):process.stdin.write((json.dumps(value)+'\n').encode());process.stdin.flush()
+def rpc(number,method,params):
+    global buffer
+    send({'jsonrpc':'2.0','id':number,'method':method,'params':params});deadline=time.monotonic()+90
+    while time.monotonic()<deadline:
+        if b'\n' not in buffer and selector.select(1):buffer+=os.read(process.stdout.fileno(),65536)
+        if b'\n' in buffer:
+            line,buffer=buffer.split(b'\n',1)
+            if not line:raise RuntimeError('MCP server exited')
+            response=json.loads(line)
+            if response.get('id')==number:
+                if 'error' in response:raise RuntimeError(response['error'])
+                return response['result']
+    raise TimeoutError('MCP response timed out: '+method)
+try:
+    rpc(1,'initialize',{'protocolVersion':'2024-11-05','capabilities':{},'clientInfo':{'name':'developer-os-offline-test','version':'1'}})
+    send({'jsonrpc':'2.0','method':'notifications/initialized'})
+    tools=rpc(2,'tools/list',{})
+    assert any(t['name']=='browser_navigate' for t in tools['tools'])
+    result=rpc(3,'tools/call',{'name':'browser_navigate','arguments':{'url':'http://127.0.0.1:'+str(server.server_port)}})
+    assert not result.get('isError'),result
+    ready=rpc(4,'tools/call',{'name':'browser_wait_for','arguments':{'text':'Saludar'}})
+    assert not ready.get('isError'),ready
+    snapshot=rpc(5,'tools/call',{'name':'browser_snapshot','arguments':{}})
+    assert 'Saludar' in json.dumps(snapshot,ensure_ascii=False),json.dumps(snapshot,ensure_ascii=False)[:4000]
+    print('PLAYWRIGHT_MCP_NAVIGATION_OK')
+finally:
+    process.terminate()
+    try:process.wait(timeout=10)
+    except subprocess.TimeoutExpired:process.kill();process.wait()
+    selector.close();server.shutdown();server.server_close()
