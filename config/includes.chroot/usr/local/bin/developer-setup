@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Check local development prerequisites without installing packages."""
+import argparse
+import shutil
+
+GROUPS = {
+    "base": ("python3", "python3-venv", "git", "cmake", "ninja-build"),
+    "android": ("default-jdk", "gradle", "adb"),
+}
+
+def missing_packages(group, installed):
+    if group not in GROUPS:
+        raise ValueError("Unknown package group")
+    return [package for package in GROUPS[group] if not installed(package)]
+
+def main():
+    parser = argparse.ArgumentParser(description="Inspect development prerequisites")
+    parser.add_argument("group", choices=GROUPS, nargs="?", default="base")
+    args = parser.parse_args()
+    missing = missing_packages(args.group, lambda package: shutil.which(package) is not None)
+    if missing:
+        print("Potential missing tools:", ", ".join(missing))
+    else:
+        print("No missing tools detected")
+
+if __name__ == "__main__":
+    main()
