@@ -24,7 +24,7 @@ tracked = git("ls-files", "-z")
 if tracked.returncode != 0 or not tracked.stdout:
     sys.exit("ERROR: no tracked source files")
 
-changes = git("status", "--porcelain", "--untracked-files=no")
+changes = git("-c", "core.filemode=false", "status", "--porcelain", "--untracked-files=no")
 if changes.returncode != 0:
     sys.exit("ERROR: unable to check source integrity")
 if changes.stdout.strip():
