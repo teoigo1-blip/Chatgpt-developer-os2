@@ -2,6 +2,8 @@
 name: Build Live USB ISO
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       publish_release:
