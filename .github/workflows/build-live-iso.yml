@@ -143,7 +143,7 @@ jobs:
           if [ -s dist/build.log ]; then
             python3 diagnose-build.py \
               dist/build.log \
-              --output dist/build-diagnosis.json
+              --output build-diagnosis.json
           else
             echo "No build log was produced."
           fi
