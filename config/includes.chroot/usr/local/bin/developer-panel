@@ -1,41 +1,70 @@
 #!/usr/bin/env python3
-"""Local GUI for explicitly supervised Codex actions."""
+"""Desktop hub for ChatGPT browser and supervised Codex CLI."""
+import shutil
 import subprocess
-import sys
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
+from pathlib import Path
 
-def launch(command):
+def launch(argv):
     try:
-        subprocess.Popen(command, start_new_session=True)
-    except OSError as error:
-        messagebox.showerror("Developer Panel", str(error))
+        subprocess.Popen(argv, start_new_session=True)
+    except OSError as exc:
+        messagebox.showerror("Developer Studio", str(exc))
+
+def terminal(argv):
+    if not shutil.which("xfce4-terminal"):
+        messagebox.showerror("Terminal", "xfce4-terminal no está disponible")
+        return
+    launch(["xfce4-terminal", "--hold", "--execute", *argv])
 
 def codex_login():
-    if messagebox.askyesno("Codex", "¿Abrir el inicio de sesión oficial de Codex?"):
-        launch(["xfce4-terminal", "--command", "developer-codex login"])
-
-def codex_task():
-    if messagebox.askyesno("Codex", "¿Abrir Codex en una terminal para supervisar la tarea?"):
-        launch(["xfce4-terminal", "--command", "developer-codex --help"])
-
-def screenshot():
-    if messagebox.askyesno("Capturar pantalla", "¿Capturar pantalla en Imágenes?"):
-        from pathlib import Path
-        folder = Path.home() / "Pictures"
-        folder.mkdir(parents=True, exist_ok=True)
-        launch(["developer-agent", "screenshot", str(folder / "developer-screen.png")])
+    if messagebox.askyesno("Codex", "¿Iniciar sesión con Codex CLI oficial?"):
+        terminal(["developer-codex", "login"])
 
 def main():
     root = tk.Tk()
-    root.title("ChatGPT Developer OS")
-    root.geometry("460x300")
-    tk.Button(root, text="Abrir ChatGPT", command=lambda: launch(["developer-chatgpt"])).pack(fill="x", padx=16, pady=8)
-    tk.Button(root, text="Iniciar sesión en Codex", command=codex_login).pack(fill="x", padx=16, pady=8)
-    tk.Button(root, text="Tarea Codex supervisada", command=codex_task).pack(fill="x", padx=16, pady=8)
-    tk.Button(root, text="Capturar pantalla", command=screenshot).pack(fill="x", padx=16, pady=8)
-    tk.Label(root, text="Las tareas que modifican archivos requieren '--confirm'").pack(pady=8)
+    root.title("ChatGPT Developer Studio")
+    root.geometry("700x570")
+    root.minsize(560, 480)
+    tk.Label(root, text="ChatGPT Developer Studio", font=("Sans", 19, "bold")).pack(pady=14)
+    tk.Label(root, text="ChatGPT web y Codex CLI oficial. No se solicita clave API.").pack()
+    tk.Button(root, text="Abrir ChatGPT", command=lambda: launch(["developer-chatgpt"])).pack(fill="x", padx=25, pady=7)
+    tk.Button(root, text="Iniciar sesión en Codex", command=codex_login).pack(fill="x", padx=25, pady=7)
+
+    path = tk.StringVar(value=str(Path.home()))
+    frame = tk.Frame(root)
+    frame.pack(fill="x", padx=25, pady=6)
+    tk.Entry(frame, textvariable=path).pack(side="left", fill="x", expand=True)
+    tk.Button(frame, text="Elegir proyecto", command=lambda: path.set(filedialog.askdirectory(initialdir=path.get()) or path.get())).pack(side="left")
+
+    tk.Label(root, text="Instrucción para Codex").pack()
+    prompt = tk.Text(root, height=6, wrap="word")
+    prompt.pack(fill="both", expand=True, padx=25, pady=5)
+
+    def codex_task():
+        project = Path(path.get()).expanduser()
+        instruction = prompt.get("1.0", "end").strip()
+        if not project.is_dir() or not instruction:
+            messagebox.showerror("Codex", "Selecciona una carpeta válida y escribe una instrucción")
+            return
+        if not shutil.which("codex"):
+            messagebox.showerror("Codex", "Instala Codex CLI con developer-codex-install antes de continuar")
+            return
+        if messagebox.askyesno("Confirmar tarea Codex", "Codex podrá modificar archivos del proyecto. ¿Continuar?"):
+            terminal(["developer-codex", "run", str(project), instruction, '--confirm'])
+
+    tk.Button(root, text="Ejecutar tarea Codex (confirmación)", command=codex_task).pack(fill="x", padx=25, pady=7)
+    tk.Button(root, text="Diagnosticar herramientas", command=lambda: terminal(["developer-doctor"])).pack(fill="x", padx=25, pady=5)
+
+    def screenshot():
+        if messagebox.askyesno("Capturar pantalla", "¿Guardar una captura local?"):
+            target = Path.home() / "Pictures" / "developer-screen.png"
+            target.parent.mkdir(parents=True, exist_ok=True)
+            launch(["developer-agent", "screenshot", str(target)])
+
+    tk.Button(root, text="Capturar pantalla", command=screenshot).pack(fill="x", padx=25, pady=5)
     root.mainloop()
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
