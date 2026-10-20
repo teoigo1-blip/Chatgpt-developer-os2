@@ -10,7 +10,8 @@ class TestV31(unittest.TestCase):
         self.assertIn('run: ./ci-environment-check.sh', (ROOT/'.github/workflows/build-live-iso.yml').read_text())
     def test_build_logs_preserved(self):
         s=(ROOT/'ci-build-iso.sh').read_text()
-        self.assertIn('See $output_dir/build.log',s)
+        self.assertIn('Full log: $output_dir/build.log',s)
+        self.assertIn('tail -n 100 "$output_dir/build.log"',s)
     def test_preflight_is_non_destructive(self):
         s=(ROOT/'ci-environment-check.sh').read_text()
         for token in ('mkfs.', 'dd if=', 'wipefs ', 'parted '): self.assertNotIn(token,s)
