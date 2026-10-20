@@ -3,7 +3,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def test_hybrid_boot():
     s=(ROOT/'build.sh').read_text()
     assert '--binary-images iso-hybrid' in s
-    assert "--bootloaders 'grub-efi syslinux'" in s
+    assert "--bootloaders" not in s  # Unsupported by runner live-build
 def test_persistence_label():
     assert 'persistence-label=persistence' in (ROOT/'build.sh').read_text()
 def test_compat_packages():
